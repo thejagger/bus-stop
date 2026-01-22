@@ -18,7 +18,7 @@ documentCounts:
   brainstormingCount: 0
   projectDocsCount: 11
 classification:
-  projectType: web_app
+  projectType: mobile_app
   domain: transit
   complexity: medium
   projectContext: brownfield
@@ -29,6 +29,7 @@ workflowType: 'prd'
 
 **Author:** derjäger  
 **Date:** 2026-01-21T21:01:27.313Z
+**Last Updated:** 2026-01-21 (Architecture changed from Web App to React Native Mobile App with Bluetooth)
 
 ## Success Criteria
 
@@ -41,11 +42,11 @@ workflowType: 'prd'
 - Manage multiple devices per account efficiently
 
 **Device Setup Users:**
-- Complete setup via QR code scan in under 5 minutes
+- Complete setup via Bluetooth discovery in React Native app in under 5 minutes
 - Add device to existing account seamlessly (multi-device support)
-- Configure WLAN connection with guided assistance
+- Configure WiFi connection by selecting network in app (no password entry needed)
 - Add bus stops to device in seconds with auto-save (no manual save button)
-- See live preview/demo view of device display while configuring
+- See live preview of device display via Bluetooth while configuring
 - Navigate map interface smoothly and intuitively
 
 **End Users (Passengers):**
@@ -114,8 +115,8 @@ workflowType: 'prd'
 **Must-Have Capabilities:**
 
 1. **Device Setup Workflow**
-   - QR code scanning from device/box
-   - WLAN configuration with guided assistance
+   - Bluetooth Low Energy (BLE) device discovery in React Native app
+   - WiFi configuration via Bluetooth (select network, send credentials)
    - Device registration with unique keys
    - Individual device configuration (no account required)
 
@@ -216,29 +217,34 @@ workflowType: 'prd'
 ### Journey 1: First-Time Device Setup User (No Account)
 
 **Opening Scene:**
-Sarah receives the package. She removes the thin cover, takes out the device from its hard paper mold, and sees setup instructions with a QR code. She's excited to set up her first bus display.
+Sarah receives the package. She removes the thin cover, takes out the device from its hard paper mold, and sees setup instructions directing her to download the React Native app. She's excited to set up her first bus display.
 
 **Rising Action:**
-- Scans QR code with her phone
-- Opens setup page/web app
-- Sees option: "Set up device" (no account) or "Create account"
-- Chooses "Set up device" (no account)
-- Guided through WLAN connection
+- Downloads React Native app from App Store/Google Play
+- Opens app and taps "Add Device"
+- App scans for nearby Bluetooth devices
+- Selects her device from the discovered list
+- Pairs with device via Bluetooth
+- Configures WiFi by selecting network from list (no password entry needed)
 - Sees interactive map of bus stops
 - Selects her home stop
 - Chooses bus lines/directions
-- Sees live preview of the display
+- Sees live preview of device display via Bluetooth
 
 **Potential Obstacles:**
 - Device appears broken (LEDs not lighting)
-- WLAN connection fails
-- QR code doesn't scan
+- WiFi connection fails
+- Bluetooth not enabled on phone
+- Device not in pairing mode
+- Bluetooth pairing fails
 - Can't find her stop on the map
 
 **Recovery Paths:**
 - Troubleshooting guide in the app
+- Enable Bluetooth guidance
+- Device pairing mode instructions
+- Bluetooth troubleshooting guide
 - Device verification/restart when online
-- Manual device code entry if QR fails
 - Map search and location assistance
 
 **Climax:**
@@ -255,13 +261,15 @@ The device works independently. She can configure it without an account and add 
 Tom receives the package and wants to manage multiple devices from one place.
 
 **Rising Action:**
-- Scans QR code
-- Opens setup page
-- Chooses "Create account"
+- Downloads React Native app (if not already installed)
+- Opens app and taps "Add Device"
+- Chooses "Create account" option
 - Sees options: Email/password or "Sign in with Google"
 - Chooses Google auth (quick sign-in)
 - Account created instantly
-- Guided through WLAN connection
+- App scans for Bluetooth devices
+- Selects device and pairs via Bluetooth
+- Configures WiFi by selecting network
 - Configures device (same as no-account path)
 - Device automatically linked to account
 
@@ -277,18 +285,19 @@ He can add more devices later, all managed from one account.
 
 **Scenario A: Individual Configuration (No Account)**
 - Mike sets up a second device individually
-- Scans QR code, configures WLAN, selects stops
+- Opens app, discovers device via Bluetooth, pairs, configures WiFi, selects stops
 - Each device works independently
 - No central management, but simple setup
 
 **Scenario B: Account-Based (With Account)**
 - Mike already has an account (from first device or created later)
 - Buys a second device for work
-- Scans QR code
-- Logs in (Google auth or email)
+- Opens app and logs in (Google auth or email)
 - Sees "Add New Device" option
+- App scans for Bluetooth devices
+- Selects new device and pairs via Bluetooth
 - Device added to account
-- Quick WLAN setup
+- Quick WiFi setup (selects network)
 - Configures work stop (different from home)
 - Both devices appear in dashboard
 
@@ -309,11 +318,11 @@ Emma glances at her device while working from home.
 - Checks display for next bus arrivals
 - Sees multiple lines
 - Later wants to add a new stop
-- Opens web app
-- If no account: scans device QR or enters device code, configures directly
-- If has account: logs in, selects device, adds stop via map
+- Opens React Native app
+- If no account: discovers device via Bluetooth, pairs, configures directly
+- If has account: logs in, selects device from list, connects via Bluetooth, adds stop via map
 - Auto-saves immediately
-- Sees live preview update
+- Sees live preview update via Bluetooth
 
 **Climax:**
 The device shows real-time arrivals for all her important connections.
@@ -329,11 +338,12 @@ The device becomes part of her daily routine. She can adjust stops easily, with 
 David notices his device stopped updating.
 
 **Rising Action:**
-- Opens web app
-- If no account: Scans device QR or enters device code to access device directly
-- If has account: Logs in, goes to device management
+- Opens React Native app
+- If no account: Discovers device via Bluetooth, pairs to access device directly
+- If has account: Logs in, goes to device management, selects device
+- Connects to device via Bluetooth
 - Sees device status: "Offline" or "Connection Issue"
-- Clicks "Verify Connection" or "Restart Device"
+- Taps "Verify Connection" or "Restart Device"
 - System attempts to reconnect
 - If online, device restarts and reconnects
 - If still offline, troubleshooting guide appears
@@ -344,202 +354,289 @@ Device comes back online and updates resume.
 **Resolution:**
 He can manage device issues remotely, whether he has an account or not.
 
-## Web App Specific Requirements
+## React Native Mobile App Requirements
 
 ### Project-Type Overview
 
-**Architecture:** React Multi-Page Application (MPA)
-- Routing infrastructure exists but currently unused
-- Component-based React architecture
-- Client-side rendering with server-side data fetching
+**Architecture:** React Native Mobile Application
+- Cross-platform mobile app (iOS and Android)
+- Native mobile interface optimized for both platforms
+- Bluetooth Low Energy (BLE) integration for device communication
+- Backend API integration via Supabase and external APIs
 
-**Deployment:** Static SPA deployment model
-- No server-side rendering required
-- Static file hosting (Vercel, Netlify, etc.)
-- API integration via Supabase and external APIs
+**Deployment:** Native Mobile App Distribution
+- iOS: App Store distribution
+- Android: Google Play Store distribution
+- Version management and synchronization across platforms
 
-### Technical Architecture Considerations
+### React Native App Architecture
+
+**Platform Support:**
+- **iOS:** iOS 13.0+ (iPhone and iPad)
+- **Android:** Android 6.0+ (API level 23+)
+- Native performance with platform-specific optimizations
 
 **Application Structure:**
-- React MPA with routing capability (ready for future expansion)
-- Component-based architecture with reusable systems (FormBuilder, DataTable)
-- State management via TanStack Query for server state
-- Form state via React Hook Form
+- React Native with TypeScript
+- Component-based architecture
+- State management via React Context / Zustand for client state
+- TanStack Query for server state and API integration
+- React Hook Form for form state management
 
-**Browser Support:**
-- Support all modern browsers (Chrome, Firefox, Safari, Edge)
-- Mobile browser support (iOS Safari, Chrome Mobile)
-- No specific version requirements (target modern browsers)
-- Progressive enhancement approach
+**Bluetooth Integration:**
+- Bluetooth library: react-native-ble-plx (recommended) or react-native-bluetooth-classic
+- BLE scanning and device discovery
+- Secure pairing and bonding
+- GATT service/characteristic communication
+- Platform-specific Bluetooth APIs handled by library
 
-**Real-Time Data:**
-- Bus arrival updates: every 30-60 seconds
-- Automatic refresh without manual intervention
-- TanStack Query for data fetching and caching
-- ZET API integration for transit data
-- Supabase real-time subscriptions (if needed)
+**Platform-Specific Permissions:**
+- **iOS:** Location permission required for BLE scanning (inform users why)
+- **Android:** Location permission required for BLE scanning (Android 6.0+)
+- Bluetooth permission handling
+- Network permission for WiFi scanning (if needed)
 
-### Browser Matrix
+### Device Hardware Requirements
 
-**Supported Browsers:**
-- **Desktop:** Chrome (latest), Firefox (latest), Safari (latest), Edge (latest)
-- **Mobile:** iOS Safari (latest), Chrome Mobile (latest), Samsung Internet (latest)
-- **Approach:** Modern browser features, graceful degradation for older browsers
+**Required Device Capabilities:**
+- **BLE Chip:** Bluetooth 4.0+ / Bluetooth Low Energy required
+- **WiFi:** 802.11n minimum (802.11ac preferred)
+- **Display:** Wide format e-ink display (monochrome, 2.9" or 4.2" recommended, exact size TBD - optimized for horizontal text display)
+- **Compute:** ESP32 (with integrated BLE + WiFi)
+- **Storage:** 4MB minimum flash storage (sufficient for firmware + configuration data)
 
-**Testing Strategy:**
-- Primary focus on mobile browsers (QR code scanning use case)
-- Desktop browsers for admin interface
-- Cross-browser testing for critical flows (device setup, configuration)
+**Device State Management:**
+- First-boot enters pairing mode automatically
+- Factory reset capability (hardware button or app command)
+- Device state tracking (new, configured, needs setup)
+- Clear visual/audio indicators for device state
 
-### Responsive Design
+### Device-to-Cloud Architecture Model
 
-**Priority:** High (critical for QR code scanning workflow)
+**Architecture:** Thin Device Model
 
-**Key Considerations:**
-- Mobile-first approach for device setup flow
-- Responsive map interface for stop selection
-- Touch-friendly interactions (large tap targets)
-- Optimized layout for phone screens during setup
-- Desktop-optimized admin interface
+**Device Role:**
+- Device receives pre-rendered display data from backend
+- Device polls backend every 30-60 seconds for updated display data
+- Device renders received data on e-ink display
+- Device stores configuration locally (WiFi credentials, stop/line settings)
 
-**Breakpoints:**
-- Mobile: < 768px (primary focus)
-- Tablet: 768px - 1024px
-- Desktop: > 1024px
+**Backend Role:**
+- Backend fetches real-time bus arrival data from ZET API
+- Backend formats data for device display (pre-rendered layout)
+- Backend caches ZET API responses to reduce API calls
+- Backend handles rate limiting and error recovery
+- Backend manages device configuration and status
 
-**Critical Mobile Flows:**
-- QR code scanning and setup initiation
-- WLAN configuration
-- Map-based stop selection
-- Device configuration and preview
+**Data Flow:**
+1. Device polls backend via WiFi every 30-60 seconds
+2. Backend fetches from ZET API (if cache expired) or serves cached data
+3. Backend formats data for device display format
+4. Device receives pre-rendered display data
+5. Device updates e-ink display with new data
+6. Device displays cached data if backend unavailable
+
+**Network Requirements:**
+- Device requires WiFi connection (no cellular fallback)
+- Device must have internet connectivity for data updates
+- Configuration can be done via Bluetooth even if WiFi not connected (stored locally, activated when WiFi available)
+
+**Benefits:**
+- Simpler device firmware (rendering only, no API integration)
+- Centralized logic and easier updates
+- Lower device cost (ESP32 sufficient)
+- Better error handling and caching at backend
+- Easier to scale (backend handles API rate limits)
+
+### Bluetooth Communication Protocol
+
+**BLE Service Architecture:**
+- Custom BLE service for device communication
+- GATT characteristics for:
+  - WiFi credential transfer
+  - Bus stop/line configuration
+  - Device status and display state
+  - Device control commands (restart, verify)
+
+**Pairing Security Model:**
+- Secure pairing/bonding process
+- Encrypted BLE communication
+- Device authentication via unique device keys
+- Pairing mode activation (automatic on first boot, manual via hardware button)
+
+**Data Transfer Format:**
+- JSON format for configuration data
+- Binary format for display data (if needed)
+- Error handling and retry mechanisms
+- Connection state management
+
+### Platform Support
+
+**iOS Requirements:**
+- iOS 13.0+ support
+- Location permission for BLE scanning
+- App Store distribution and approval process
+- TestFlight for beta testing
+
+**Android Requirements:**
+- Android 6.0+ (API level 23+) support
+- Location permission for BLE scanning
+- Google Play Store distribution
+- Internal testing track for beta
+
+**Version Management:**
+- Synchronized version numbers across platforms
+- Feature parity between iOS and Android
+- Platform-specific optimizations where needed
 
 ### Performance Targets
 
-**Primary Concern:** Mobile device performance
+**Primary Concern:** Mobile app performance and battery efficiency
 
 **Performance Goals:**
-- Initial page load: < 3 seconds on 4G
-- Time to interactive: < 5 seconds
+- App launch time: < 2 seconds
+- Bluetooth device discovery: < 5 seconds
+- Map interface loads and becomes interactive: < 3 seconds
 - Setup flow completion: Smooth, no lag during interactions
-- Map rendering: Responsive, smooth pan/zoom
-- Real-time updates: Non-blocking, seamless refresh
+- Bluetooth data transfer: Efficient, minimal battery impact
 
 **Optimization Strategies:**
-- Code splitting for routes
-- Lazy loading for map components
-- Image optimization
-- Efficient data fetching (only load what's needed)
-- TanStack Query caching to reduce API calls
+- Code splitting and lazy loading
+- Image optimization and caching
+- Efficient Bluetooth communication (minimize connection time)
+- Background task optimization
+- Battery-efficient BLE scanning
 
 **Monitoring:**
-- Focus on mobile performance metrics
-- Monitor setup flow completion times
-- Track real-time update performance
+- App performance metrics (launch time, frame rate)
+- Bluetooth connection success rate
+- Setup flow completion times
+- Battery usage impact
 
-### SEO Strategy
+### Native Mobile Design
 
-**Approach:** Not required for this project
+**Design Approach:**
+- Native iOS and Android design patterns
+- Platform-specific UI components where appropriate
+- Consistent user experience across platforms
+- Touch-optimized interactions (large tap targets)
 
-**Rationale:**
-- Public-facing product page is separate project
-- Application is behind authentication/device setup
-- No public content requiring search indexing
-- Focus on functionality over SEO
+**Critical Mobile Flows:**
+- Bluetooth device discovery and pairing
+- WiFi network selection and credential transfer
+- Map-based stop selection
+- Device configuration and live preview
+- Error recovery and troubleshooting
 
-**Future Considerations:**
-- If public pages added later, implement SEO best practices
-- Meta tags and structured data for product page (separate project)
+### Accessibility
 
-### Accessibility Level
-
-**Target:** WCAG standard compliance
-
-**Current Foundation:**
-- React + Shadcn UI provides good accessibility baseline
-- Radix UI primitives are accessible by default
-- Semantic HTML structure
+**Target:** WCAG standard compliance (mobile app accessibility)
 
 **Key Requirements:**
-- Keyboard navigation support
-- Screen reader compatibility
-- Focus management
-- ARIA labels where needed
+- Screen reader compatibility (VoiceOver on iOS, TalkBack on Android)
+- Dynamic type support (iOS) / Font scaling (Android)
 - Color contrast compliance
-- Form validation accessibility
+- Touch target size (minimum 44x44 points)
+- Clear error messages and feedback
 
 **Priority Areas:**
 - Device setup flow (critical user path)
-- Form interactions (FormBuilder system)
 - Map interface (stop selection)
-- Error messages and feedback
-
-**Enhancement Approach:**
-- Leverage Shadcn/Radix accessibility features
-- Add ARIA labels where needed
-- Ensure keyboard navigation works throughout
-- Test with screen readers for critical flows
+- Error messages and recovery guidance
+- Bluetooth pairing process
 
 ### Implementation Considerations
 
 **Mobile-First Development:**
-- Test QR code scanning flow on actual mobile devices
+- Test Bluetooth functionality on actual iOS and Android devices
 - Optimize map performance on mobile
-- Ensure touch interactions are smooth
-- Validate setup flow on various phone sizes
+- Ensure smooth touch interactions
+- Validate setup flow on various phone sizes and models
+
+**Map Library:**
+- **Library:** Leaflet.js with react-leaflet (React wrapper for Leaflet)
+- **Implementation:** 
+  - For React Native: Use react-native-webview to embed Leaflet map (web-based Leaflet in WebView)
+  - Alternative: Use react-native-maps with Leaflet-style OpenStreetMap tiles if native performance is critical
+- **Map Source:** OpenStreetMap (free, open-source, no API costs)
+- **Tile Provider:** OpenStreetMap tiles directly or compatible providers (MapTiler, Stadia Maps)
+- **Benefits:** 
+  - Mature, well-documented library
+  - Extensive plugin ecosystem (marker clustering, geocoding, etc.)
+  - Excellent OpenStreetMap integration
+  - Free, no usage limits
+  - Already used in existing codebase (react-leaflet)
+- **Features:** Interactive map, stop selection, pan/zoom, location search, marker clustering, custom markers
+- **Considerations:** 
+  - WebView approach has some performance overhead but acceptable for map interactions
+  - Tile caching recommended for offline capability
+  - Ensure good tile loading performance on mobile networks
 
 **Real-Time Update Strategy:**
-- Polling every 30-60 seconds for bus arrivals
+- Backend API polling for bus arrival data (every 30-60 seconds)
 - Efficient data fetching to minimize battery impact
 - Background updates without blocking UI
-- Error handling for failed updates
+- Error handling for failed API calls
 
-**Routing Strategy:**
-- Routing infrastructure ready for future expansion
-- Current focus on core functionality
-- Plan for route-based code splitting when routing is activated
+**Bluetooth Connection Management:**
+- Efficient BLE scanning (scan intervals, duration)
+- Connection pooling and reuse
+- Automatic reconnection on failure
+- Connection state indicators in UI
 
-**Progressive Web App:**
-- **Not Required:** No offline functionality needed
-- **Not Required:** No install prompt needed
-- Standard web app experience is sufficient
+**Offline Capability:**
+- Configuration state persisted locally (AsyncStorage or similar)
+- Resume configuration after app restart
+- Partial configuration recovery
+- Offline mode for configuration (store locally, sync when online)
 
 ## Functional Requirements
 
 ### Device Setup & Onboarding
 
-- FR1: Users can scan QR code from device/box to initiate setup
-- FR2: Users can configure device WLAN connection through guided workflow
+- FR1: Users can discover nearby devices via Bluetooth Low Energy (BLE) scanning in React Native app
+- FR2: Users can configure device WiFi connection by selecting network in app and sending credentials to device via Bluetooth BLE
 - FR3: System can generate and store unique device keys
 - FR4: Users can set up device without creating an account
 - FR5: System can register devices with unique identifiers
-- FR6: Users can access device setup via QR code or manual device code entry
+- FR6: Users can access device configuration via Bluetooth pairing in React Native app
+- FR36: System can securely pair/bond React Native app with device via Bluetooth BLE
+- FR37: App can identify and display device information during Bluetooth discovery (device name, signal strength, pairing status)
+- FR38: Device can enter pairing mode for initial setup (automatic on first boot, manual via hardware button)
 
 ### Device Configuration
 
 - FR7: Users can view interactive map of bus stops
 - FR8: Users can select bus stops from map interface
 - FR9: Users can select bus lines and directions for selected stops
-- FR10: Users can see live preview of device display during configuration
+- FR10: Users can see live preview of device display via Bluetooth connection during configuration
 - FR11: System can auto-save configuration changes without manual save action
-- FR12: Users can configure multiple stops per device
-- FR13: Users can configure multiple lines per stop
+- FR12: Users can configure multiple stops per device (maximum: 10 stops)
+- FR13: Users can configure multiple lines per stop (maximum: 5 lines per stop)
+- FR39: App can send bus stop and line configuration to device via Bluetooth BLE
+- FR40: App can receive device status and display state via Bluetooth BLE for live preview
+- FR41: Configuration state persists locally in app and can be resumed after app restart
 
 ### Real-Time Data Display
 
 - FR14: System can fetch real-time bus arrival data from transit API
 - FR15: Device display can show bus arrival times for configured stops and lines
-- FR16: System can automatically refresh arrival data at regular intervals
+- FR16: System can automatically refresh arrival data at regular intervals (every 30-60 seconds)
 - FR17: Device display can show multiple lines simultaneously
 - FR18: System can handle API errors gracefully and display appropriate fallback
+- FR44: Display order prioritizes bus arrivals by arrival time (soonest arrivals shown first)
+- FR45: Display updates within 60 seconds regardless of number of configured stops/lines (performance requirement)
 
 ### Device Management
 
 - FR19: Users can view device status (online/offline)
 - FR20: Users can verify device connection remotely
 - FR21: Users can restart device remotely when device is online
-- FR22: Users can access device configuration directly via QR code or device code
+- FR22: Users can access device configuration directly via Bluetooth connection in React Native app
 - FR23: System can provide troubleshooting guidance for common issues
 - FR24: Users can modify device configuration after initial setup
+- FR42: App handles Bluetooth connection failures gracefully with clear error messages and recovery guidance
+- FR43: App can configure device even when device is not connected to WiFi (configuration stored on device, activated when WiFi connected)
 
 ### Account Management (Post-MVP - Phase 2)
 
@@ -552,11 +649,11 @@ He can manage device issues remotely, whether he has an account or not.
 
 ### User Interface
 
-- FR31: System can provide responsive interface optimized for mobile devices
+- FR31: React Native app provides native mobile interface optimized for iOS and Android
 - FR32: Users can navigate setup workflow intuitively
 - FR33: System can provide clear error messages and recovery guidance
-- FR34: Users can access device configuration from mobile browser
-- FR35: Map interface can support touch interactions (pan, zoom, tap)
+- FR34: Users can access device configuration from React Native mobile app
+- FR35: Map interface supports native touch interactions (pan, zoom, tap)
 
 ## Non-Functional Requirements
 

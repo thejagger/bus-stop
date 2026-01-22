@@ -289,3 +289,159 @@ All Supabase tables have RLS enabled:
 **Schedule Cache:**
 - Public read by device_id (for device polling)
 - Authenticated write
+
+---
+
+## Device Polling API (Edge Functions)
+
+**Base URL:** `{SUPABASE_URL}/functions/v1`  
+**Purpose:** ESP32 devices poll these endpoints for configuration and schedule data  
+**Authentication:** Device ID validation (no user auth required)
+
+### Get Device Configuration
+
+**Endpoint:** `GET /device-config/:deviceId`  
+**Purpose:** Get device configuration (stops and lines)  
+**Location:** `supabase/functions/device-config/index.ts`
+
+**Response:**
+```typescript
+{
+  device: {
+    id: string;
+    code: string;
+    area: string;
+    display_name: string | null;
+  };
+  configurations: Array<{
+    id: string;
+    stop: {
+      id: string;
+      name: string;
+      external_id: string;
+      latitude: number;
+      longitude: number;
+    };
+    line: {
+      id: string;
+      name: string;
+      external_id: string;
+      direction: string;
+    };
+    display_order: number;
+  }>;
+}
+```
+
+**Usage:** Device polls this endpoint every 30-60 seconds to get updated configuration.
+
+---
+
+### Get Device Status
+
+**Endpoint:** `GET /device-status/:deviceId`  
+**Purpose:** Get device online status and metadata  
+**Location:** `supabase/functions/device-status/index.ts`
+
+**Response:**
+```typescript
+{
+  device_id: string;
+  is_online: boolean;
+  last_seen: string | null;
+  firmware_version: string | null;
+  wifi_ssid: string | null;
+  wifi_connected: boolean;
+}
+```
+
+**Usage:** Mobile app queries this to show device status in dashboard.
+
+---
+
+### Device Heartbeat
+
+**Endpoint:** `POST /device-heartbeat/:deviceId`  
+**Purpose:** Device sends heartbeat to update last_seen timestamp  
+**Location:** `supabase/functions/device-heartbeat/index.ts`
+
+**Payload:**
+```typescript
+{
+  firmware_version?: string;
+  wifi_ssid?: string;
+  wifi_connected?: boolean;
+}
+```
+
+**Response:**
+```typescript
+{
+  success: boolean;
+  timestamp: string;
+}
+```
+
+**Usage:** Device sends heartbeat every 30-60 seconds after successful WiFi connection.
+
+---
+
+### Get Device Schedule
+
+**Endpoint:** `GET /device-schedule/:deviceId`  
+**Purpose:** Get cached schedule data for device display  
+**Location:** `supabase/functions/device-schedule/index.ts`
+
+**Response:**
+```typescript
+{
+  device_id: string;
+  schedules: Array<{
+    stop_id: string;
+    line_id: string;
+    stop: {
+      id: string;
+      name: string;
+      external_id: string;
+    };
+    line: {
+      id: string;
+      name: string;
+      external_id: string;
+      direction: string;
+    };
+    arrivals: Array<{
+      arrival_time: string;
+      route_name: string;
+      headsign: string;
+    }>;
+  }>;
+  cached_at: string;
+}
+```
+
+**Usage:** Device polls this endpoint to get cached arrival times for display.
+
+---
+
+## Mobile App API
+
+**Base URL:** Same Supabase endpoints as web app  
+**Authentication:** Supabase Auth (email/password or Google OAuth)
+
+### Bluetooth BLE Communication
+
+**Service UUID:** `0000ff00-0000-1000-8000-00805f9b34fb`
+
+**Characteristics:**
+- **WiFi Configuration** (`0000ff01-...`) - Write WiFi credentials to device
+- **Device Status** (`0000ff02-...`) - Notify connection status updates
+- **Device Info** (`0000ff03-...`) - Read device information (code, firmware version)
+
+**Protocol:**
+1. App scans for BLE devices with service UUID
+2. App connects to device
+3. App writes WiFi credentials via WiFi Config characteristic
+4. Device attempts WiFi connection
+5. Device sends status updates via Device Status characteristic
+6. Once connected, device closes BLE and starts polling API endpoints
