@@ -16,11 +16,11 @@ _This file contains critical rules and patterns that AI agents must follow when 
 
 **Mobile App Framework:**
 - Expo CLI with TypeScript template
-- Expo SDK 54 (React Native 0.74+)
+- Expo SDK 52 (React Native 0.76.5)
 - Expo Router v6.0.21 (file-based routing)
 
 **Core Libraries:**
-- TypeScript 5.9 (strict mode required)
+- TypeScript 5.3.3 (strict mode required)
 - Zustand v5.0.10 (client state management)
 - TanStack Query v5 (server state management)
 - Zod v4 (schema validation)
@@ -37,7 +37,7 @@ _This file contains critical rules and patterns that AI agents must follow when 
 - Metro bundler (via Expo)
 
 **Critical Version Constraints:**
-- react-native-ble-plx v3.5.0 requires Expo 51+ (compatible with Expo SDK 54)
+- react-native-ble-plx v3.5.0 requires Expo 51+ (compatible with Expo SDK 52)
 - Development builds REQUIRED for Bluetooth BLE (cannot use Expo Go)
 - TypeScript strict mode MUST be enabled
 

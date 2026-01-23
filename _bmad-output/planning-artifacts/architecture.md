@@ -220,7 +220,7 @@ npx create-expo-app BusStopApp --template blank-typescript
 
 **What You'll Need to Add:**
 - Supabase client integration (@supabase/supabase-js)
-- Bluetooth BLE library (react-native-ble-plx v3.5.0 - compatible with Expo 51)
+- Bluetooth BLE library (react-native-ble-plx v3.5.0 - compatible with Expo SDK 52)
 - TanStack Query setup (@tanstack/react-query)
 - Zod validation (zod)
 - React Navigation for routing
@@ -279,7 +279,7 @@ npx @react-native-community/cli@latest init BusStopApp --template react-native-t
 
 1. **2026 Best Practice:** Expo CLI is now the officially recommended approach for React Native development
 2. **Developer Experience:** Faster setup, better tooling, and easier React Native version upgrades
-3. **Bluetooth BLE Support:** Development builds fully support custom native modules including react-native-ble-plx (v3.5.0 compatible with Expo 51)
+3. **Bluetooth BLE Support:** Development builds fully support custom native modules including react-native-ble-plx (v3.5.0 compatible with Expo SDK 52)
 4. **Supabase Integration:** Multiple well-maintained Supabase starter templates available
 5. **Future-Proof:** Continuous Native Generation (CNG) simplifies React Native upgrades
 6. **OTA Updates:** Over-the-air update capability for faster iteration
@@ -330,7 +330,7 @@ npx create-expo-app BusStopApp --template blank-typescript
 
 **Decision:** Expo Router (file-based routing)
 
-**Version:** v6.0.21 (stable, bundled with Expo SDK 54)
+**Version:** v6.0.21 (stable, bundled with Expo SDK 52)
 
 **Rationale:**
 - Built into Expo ecosystem, no additional setup required
@@ -1941,14 +1941,14 @@ All architectural decisions are compatible and work together seamlessly:
 - **Expo CLI + TypeScript:** Fully compatible, Expo Router integrates perfectly
 - **Zustand + TanStack Query:** Clear separation of concerns (client vs server state)
 - **Supabase + REST API:** Standard integration pattern, well-supported
-- **react-native-ble-plx + Expo:** Compatible via development builds (v3.5.0 supports Expo 51)
+- **react-native-ble-plx + Expo:** Compatible via development builds (v3.5.0 supports Expo SDK 52)
 - **Leaflet.js + WebView:** Standard React Native pattern for web-based maps
 - **UUID v4 + Supabase:** Native UUID support in PostgreSQL, consistent format
 
 **Version Compatibility:**
-- Expo SDK 54 + Expo Router 6.0.21 ✅
-- React Native 0.74+ + react-native-ble-plx 3.5.0 ✅
-- TypeScript 5.9 + Zod v4 ✅
+- Expo SDK 52 + Expo Router 6.0.21 ✅
+- React Native 0.76.5 + react-native-ble-plx 3.5.0 ✅
+- TypeScript 5.3.3 + Zod v4 ✅
 - TanStack Query v5 + Zustand 5.0.10 ✅
 - Supabase JS v2.58.0 + PostgreSQL 17 ✅
 
@@ -2378,7 +2378,7 @@ This architecture document provides comprehensive guidance for consistent, high-
 
 **📚 AI Agent Implementation Guide**
 
-- Technology stack with verified versions (Expo SDK 54, React Native 0.74+, etc.)
+- Technology stack with verified versions (Expo SDK 52, React Native 0.76.5, etc.)
 - Consistency rules that prevent implementation conflicts
 - Project structure with clear boundaries (200+ files/directories)
 - Integration patterns and communication standards

@@ -1,0 +1,88 @@
+# Sprint Status - bus-stop
+# Generated: 2026-01-23
+# Project: bus-stop
+# Tracking System: file-system
+# Story Location: _bmad-output/implementation-artifacts
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created, ready for development
+#   - in-progress: Developer actively working on implementation
+#   - review: Implementation complete, ready for review
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Mark epic as 'in-progress' when starting work on its first story
+# - SM typically creates next story ONLY after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then Dev runs code-review (fresh context, ideally different LLM)
+
+generated: "2026-01-23"
+project: "bus-stop"
+project_key: "bus-stop"
+tracking_system: "file-system"
+story_location: "_bmad-output/implementation-artifacts"
+
+development_status:
+  # Epic 1: Project Foundation & Infrastructure
+  epic-1: backlog
+  1-1-initialize-expo-project-with-typescript: backlog
+  1-2-configure-core-dependencies-and-libraries: backlog
+  1-3-set-up-development-environment-and-build-configuration: backlog
+  1-4-establish-project-structure-and-error-handling-infrastructure: backlog
+  epic-1-retrospective: optional
+
+  # Epic 2: Device Discovery & Initial Setup
+  epic-2: backlog
+  2-1-bluetooth-ble-discovery-ui-and-device-scanning: backlog
+  2-2-device-pairing-and-connection-management: backlog
+  2-3-wifi-network-selection-and-configuration: backlog
+  2-4-device-registration-and-key-generation: backlog
+  2-5-error-handling-and-recovery-for-setup-flow: backlog
+  epic-2-retrospective: optional
+
+  # Epic 3: Bus Stop & Line Configuration
+  epic-3: backlog
+  3-1-interactive-map-interface-with-bus-stop-markers: backlog
+  3-2-bus-stop-selection-and-details-bottom-sheet: backlog
+  3-3-bus-line-selection-and-configuration: backlog
+  3-4-auto-save-configuration-and-state-persistence: backlog
+  3-5-live-preview-via-bluetooth: backlog
+  3-6-modify-existing-configuration: backlog
+  epic-3-retrospective: optional
+
+  # Epic 4: Real-Time Bus Arrival Display
+  epic-4: backlog
+  4-1-backend-zet-api-integration-and-data-fetching: backlog
+  4-2-device-polling-and-display-update-mechanism: backlog
+  4-3-display-prioritization-and-multiple-line-display: backlog
+  4-4-error-handling-and-fallback-behavior: backlog
+  epic-4-retrospective: optional
+
+  # Epic 5: Device Management & Troubleshooting
+  epic-5: backlog
+  5-1-device-status-monitoring-and-display: backlog
+  5-2-remote-device-verification: backlog
+  5-3-remote-device-restart: backlog
+  5-4-troubleshooting-guides-and-error-recovery: backlog
+  epic-5-retrospective: optional
+
+  # Epic 6: Account Management & Multi-Device Support (Post-MVP)
+  epic-6: backlog
+  6-1-user-account-creation-with-email-password: backlog
+  6-2-google-authentication-integration: backlog
+  6-3-multi-device-dashboard: backlog
+  6-4-device-management-from-account: backlog
+  6-5-device-switching-and-organization: backlog
+  epic-6-retrospective: optional

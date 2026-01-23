@@ -138,12 +138,23 @@ workflowType: 'prd'
    - Remote restart capability
    - Basic troubleshooting guides
 
+5. **Internationalization (MVP or Early Post-MVP)**
+   - Multi-language support for app interface
+   - Language selection capability
+   - Localized user-facing text (UI labels, buttons, messages)
+   - Device language detection and default language setting
+
 **MVP Exclusions (Post-MVP):**
 - Account creation and management
 - Multi-device dashboard
 - Advanced troubleshooting tools
 - Device analytics
 - Google authentication
+
+**Note on Internationalization:**
+- Multi-language support is important and should be prioritized for MVP or early Post-MVP
+- Initial languages: Croatian (primary), English (secondary)
+- Additional languages can be added in Phase 2 based on market needs
 
 ### Post-MVP Features
 
@@ -154,6 +165,13 @@ workflowType: 'prd'
 - Multi-device account management
 - Device dashboard for account holders
 - Device grouping and organization
+
+**Internationalization:**
+- Multi-language support for app interface
+- Language selection in settings
+- Localized error messages and troubleshooting guides
+- Support for device language detection and default language setting
+- Localized map interface and bus stop information
 
 **Enhanced Features:**
 - Advanced troubleshooting tools and diagnostics
@@ -173,7 +191,7 @@ workflowType: 'prd'
 **Integration & Scale:**
 - Integration with smart home systems
 - Voice alerts and notifications
-- Multi-language support
+- Additional language support and regional localization
 - Enterprise/wholesale features
 
 ### Risk Mitigation Strategy
@@ -654,6 +672,16 @@ He can manage device issues remotely, whether he has an account or not.
 - FR33: System can provide clear error messages and recovery guidance
 - FR34: Users can access device configuration from React Native mobile app
 - FR35: Map interface supports native touch interactions (pan, zoom, tap)
+
+### Internationalization & Localization
+
+- FR46: App supports multiple languages (multilingual support)
+- FR47: Users can select their preferred language in app settings
+- FR48: All user-facing text (UI labels, buttons, messages, error messages) is translatable
+- FR49: App detects device language and sets default language accordingly
+- FR50: Language preference persists across app sessions
+- FR51: Map interface and bus stop names support localization
+- FR52: Error messages and troubleshooting guides are available in all supported languages
 
 ## Non-Functional Requirements
 
