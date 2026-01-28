@@ -55,33 +55,6 @@ class ZetApiService {
   }
 
   /**
-   * Register a new account (may not be available via API)
-   * @deprecated Registration returns "Method Not Allowed" - users must register manually
-   */
-  async register(): Promise<void> {
-    const email = import.meta.env.VITE_ZET_API_EMAIL || "jackpot.auer@gmail.com";
-    const password = import.meta.env.VITE_ZET_API_PASSWORD || "KYgPZ7xTIxLDRvcp9Oq8";
-
-    try {
-      await this.zetManager.authManager.register({
-        email,
-        password,
-        confirmPassword: password,
-      });
-    } catch (error: any) {
-      console.error("Error registering with ZET API:", error);
-      // Registration is not available via API
-      if (error.message?.includes("Method Not Allowed")) {
-        throw new Error(
-          "Registration is not available via API. Please register manually at the ZET website, " +
-          "then add your credentials to .env.local as VITE_ZET_API_EMAIL and VITE_ZET_API_PASSWORD"
-        );
-      }
-      throw error;
-    }
-  }
-
-  /**
    * Get all stops from ZET API
    */
   async getStops(): Promise<Stop[]> {
