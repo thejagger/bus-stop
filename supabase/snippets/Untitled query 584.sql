@@ -1,0 +1,1 @@
+SELECT * from stops where name ILIKE '%kruge%'

@@ -1,0 +1,1 @@
+select cron.unschedule('invoke-sync-zet');

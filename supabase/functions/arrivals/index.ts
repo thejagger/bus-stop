@@ -1,0 +1,167 @@
+/**
+ * Edge Function: device arrivals.
+ * Call from device with mac + secret (query or JSON body).
+ * Returns next 2 trips for device's stop/route, active news string, and route color.
+ */
+
+import { createClient } from "npm:@supabase/supabase-js@2";
+
+const ZET_BASE = "https://api.zet.hr";
+const TIMETABLE_URL = `${ZET_BASE}/TimetableService.Api/api/gtfs`;
+const DEFAULT_COLOR = "#FFCC00";
+
+const ZET_HEADERS: Record<string, string> = {
+  accept: "application/json, text/plain, */*",
+  appuid: "ZET.Mobile",
+  "Content-Type": "application/json",
+  language: "hr",
+  "User-Agent": "okhttp/4.9.2",
+  "x-tenant": "KingICT_ZET_Public",
+};
+
+function corsHeaders(origin?: string | null): Record<string, string> {
+  return {
+    "Access-Control-Allow-Origin": origin ?? "*",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  };
+}
+
+function jsonResponse(
+  body: unknown,
+  status: number,
+  origin?: string | null
+): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json", ...corsHeaders(origin) },
+  });
+}
+
+async function fetchIncomingTrips(stopId: string): Promise<unknown[]> {
+  const url = `${TIMETABLE_URL.replace(/\/$/, "")}/stops/${encodeURIComponent(stopId)}/incoming-trips`;
+  const res = await fetch(url, { headers: ZET_HEADERS });
+  if (!res.ok) return [];
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
+}
+
+Deno.serve(async (req: Request) => {
+  const origin = req.headers.get("Origin");
+
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders(origin) });
+  }
+
+  let mac: string | null = null;
+  let secret: string | null = null;
+
+  if (req.method === "GET") {
+    const url = new URL(req.url);
+    mac = url.searchParams.get("mac");
+    secret = url.searchParams.get("secret");
+  } else if (req.method === "POST") {
+    try {
+      const body = await req.json();
+      mac = body?.mac ?? null;
+      secret = body?.secret ?? null;
+    } catch {
+      return jsonResponse({ error: "Invalid JSON body" }, 400, origin);
+    }
+  } else {
+    return jsonResponse({ error: "Method not allowed" }, 405, origin);
+  }
+
+  if (!mac || !secret) {
+    return jsonResponse({ error: "mac and secret are required" }, 400, origin);
+  }
+
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const supabase = createClient(supabaseUrl, supabaseKey);
+
+  const { data: device, error: deviceError } = await supabase
+    .from("devices")
+    .select("secret, config")
+    .eq("mac", mac)
+    .single();
+
+  if (deviceError || !device) {
+    return jsonResponse({ error: "Device not found" }, 404, origin);
+  }
+  if (device.secret !== secret) {
+    return jsonResponse({ error: "Invalid secret" }, 401, origin);
+  }
+
+  const config = device.config as { stopId?: string; routeId?: number } | null;
+  const stopId = config?.stopId;
+  const routeId = config?.routeId;
+
+  if (!stopId || routeId == null) {
+    return jsonResponse(
+      { error: "Device config missing stopId or routeId" },
+      400,
+      origin
+    );
+  }
+
+  let trips: Array<{
+    tripId: string;
+    routeId?: number;
+    routeCode?: string;
+    headsign?: string;
+    nextStop?: string;
+    expectedAt?: string;
+  }> = [];
+
+  try {
+    const incoming = await fetchIncomingTrips(stopId);
+    const forRoute = incoming.filter(
+      (t: { routeId?: number; routeCode?: string }) =>
+        t.routeId === routeId || t.routeCode === String(routeId)
+    );
+    const nextTwo = forRoute.slice(0, 2);
+    trips = nextTwo.map((t: { id: string; routeId?: number; routeCode?: string; headsign?: string; stopTimes?: Array<{ stopName?: string; expectedArrivalDateTime?: string; isArrived?: boolean }> }) => {
+      const nextStop = t.stopTimes?.find((s: { isArrived?: boolean }) => !s.isArrived);
+      return {
+        tripId: t.id,
+        routeId: t.routeId,
+        routeCode: t.routeCode,
+        headsign: t.headsign,
+        nextStop: nextStop?.stopName,
+        expectedAt: nextStop?.expectedArrivalDateTime,
+      };
+    });
+  } catch (e) {
+    console.error("arrivals fetchIncomingTrips:", e);
+  }
+
+  let news = "";
+  const now = new Date().toISOString();
+  const { data: newsRows } = await supabase
+    .from("zet_news")
+    .select("title, lines")
+    .lte("valid_from", now)
+    .gte("valid_to", now)
+    .order("valid_to", { ascending: true })
+    .limit(5);
+  if (newsRows?.length) {
+    news = newsRows
+      .map((n: { title: string; lines: string[] | null }) => {
+        const lines = n.lines;
+        const lineStr = lines?.length ? ` (${lines.join(", ")})` : "";
+        return `${n.title}${lineStr}`;
+      })
+      .join(" · ");
+  }
+
+  let color = DEFAULT_COLOR;
+  const { data: route } = await supabase
+    .from("routes")
+    .select("color")
+    .eq("id", routeId)
+    .single();
+  if (route?.color) color = route.color;
+
+  return jsonResponse({ trips, news, color }, 200, origin);
+});
