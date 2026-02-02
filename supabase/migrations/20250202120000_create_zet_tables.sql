@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS public.stops (
     updated_at  timestamptz DEFAULT now() NOT NULL
 );
 
--- Routes: for map and device config
+-- Routes: for map and device config (news_text = concatenated news for device subtext)
 CREATE TABLE IF NOT EXISTS public.routes (
     id          integer PRIMARY KEY,
     name        text NOT NULL,
@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS public.routes (
     departure_headsign text,
     destination_headsign text,
     normalized_search_name text,
+    news_text   text,
     updated_at  timestamptz DEFAULT now() NOT NULL
 );
 
@@ -32,17 +33,6 @@ CREATE TABLE IF NOT EXISTS public.stop_routes (
     stop_id     text NOT NULL REFERENCES public.stops(id) ON DELETE CASCADE,
     route_id    integer NOT NULL REFERENCES public.routes(id) ON DELETE CASCADE,
     PRIMARY KEY (stop_id, route_id)
-);
-
--- ZET newsfeed: for ticker and service updates
-CREATE TABLE IF NOT EXISTS public.zet_news (
-    id          text PRIMARY KEY,
-    title       text NOT NULL,
-    body        text,
-    lines       jsonb DEFAULT '[]'::jsonb,
-    valid_from  timestamptz NOT NULL,
-    valid_to    timestamptz NOT NULL,
-    updated_at  timestamptz DEFAULT now() NOT NULL
 );
 
 -- Devices: MAC + secret + config (stopId, routeId)
@@ -56,20 +46,16 @@ CREATE TABLE IF NOT EXISTS public.devices (
 -- Indexes for common lookups and search
 CREATE INDEX IF NOT EXISTS idx_stops_normalized_search ON public.stops(normalized_search_name);
 CREATE INDEX IF NOT EXISTS idx_routes_normalized_search ON public.routes(normalized_search_name);
-CREATE INDEX IF NOT EXISTS idx_zet_news_valid ON public.zet_news(valid_from, valid_to);
-
 -- RLS: allow anon/service role for app and cron (adjust policies as needed for auth)
 ALTER TABLE public.stops ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.routes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.stop_routes ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.zet_news ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.devices ENABLE ROW LEVEL SECURITY;
 
 -- Allow read for anon (map, setup); devices table used by API with secret
 CREATE POLICY "Allow read stops" ON public.stops FOR SELECT USING (true);
 CREATE POLICY "Allow read routes" ON public.routes FOR SELECT USING (true);
 CREATE POLICY "Allow read stop_routes" ON public.stop_routes FOR SELECT USING (true);
-CREATE POLICY "Allow read zet_news" ON public.zet_news FOR SELECT USING (true);
 -- Devices: only service role (cron, device API, dashboard server) can access
 CREATE POLICY "Service role read devices" ON public.devices FOR SELECT USING (auth.role() = 'service_role');
 CREATE POLICY "Service role insert devices" ON public.devices FOR INSERT WITH CHECK (auth.role() = 'service_role');

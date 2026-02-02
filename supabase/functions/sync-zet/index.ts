@@ -35,7 +35,7 @@ Deno.serve(async (req: Request) => {
     routes: { upserted: 0, errors: 0 },
     stops: { upserted: 0, errors: 0 },
     stop_routes: { upserted: 0, errors: 0 },
-    news: { upserted: 0, errors: 0 },
+    routes_news_text: { updated: 0, errors: 0 },
   };
 
   // 1. Routes (first: stops reference routes via stop_routes)
@@ -151,30 +151,43 @@ Deno.serve(async (req: Request) => {
     console.error("sync-zet stops:", e);
   }
 
-  // 3. Newsfeed
+  // 3. Newsfeed: fetch from ZET, build news_text per route (no table)
   try {
     const data = await zetGet(NEWS_URL, "");
     const news = Array.isArray(data) ? data : [];
-    const rows = news
-      .filter((n: { id?: unknown; title?: unknown; validFrom?: unknown; validTo?: unknown }) =>
-        n.id != null && n.title != null && n.validFrom != null && n.validTo != null
-      )
-      .map((n: { id: string | number; title: string; body?: string; lines?: string[]; validFrom: string; validTo: string }) => ({
-        id: String(n.id),
-        title: n.title,
-        body: n.body ?? null,
-        lines: Array.isArray(n.lines) ? n.lines : [],
-        valid_from: n.validFrom,
-        valid_to: n.validTo,
-      }));
-    if (rows.length > 0) {
-      const { error } = await supabase.from("zet_news").upsert(rows, { onConflict: "id" });
-      if (error) result.news.errors += 1;
-      else result.news.upserted = rows.length;
+    const now = new Date().toISOString();
+    const routeNews = new Map<number, string[]>();
+    for (const n of news) {
+      if (n.description == null || n.validFrom == null || n.validTo == null) continue;
+      const text = String(n.description).trim() || "";
+      if (!text) continue;
+      if (n.validFrom > now || n.validTo < now) continue;
+      const lineIds = Array.isArray(n.lines) ? n.lines.map((x: unknown) => Number(x)).filter(Number.isInteger) : [];
+      for (const routeId of lineIds) {
+        const list = routeNews.get(routeId) ?? [];
+        if (!list.includes(text)) list.push(text);
+        routeNews.set(routeId, list);
+      }
     }
+    const { data: routesInDb } = await supabase.from("routes").select("id");
+    const routeIds = (routesInDb ?? []).map((r: { id: number }) => r.id);
+    const idsWithNews = Array.from(routeNews.keys()).filter((id) => routeIds.includes(id));
+    const idsWithoutNews = routeIds.filter((id) => !routeNews.has(id));
+    let updated = 0;
+    for (const routeId of idsWithNews) {
+      const texts = routeNews.get(routeId)!;
+      const newsText = texts.join(" - ");
+      const { error: upErr } = await supabase.from("routes").update({ news_text: newsText }).eq("id", routeId);
+      if (!upErr) updated += 1;
+    }
+    if (idsWithoutNews.length > 0) {
+      const { error: clearErr } = await supabase.from("routes").update({ news_text: null }).in("id", idsWithoutNews);
+      if (!clearErr) updated += idsWithoutNews.length;
+    }
+    result.routes_news_text.updated = updated;
   } catch (e) {
-    result.news.errors += 1;
-    console.error("sync-zet news:", e);
+    result.routes_news_text.errors += 1;
+    console.error("sync-zet news_text:", e);
   }
 
   return new Response(JSON.stringify({ ok: true, result }), {

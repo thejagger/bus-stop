@@ -136,32 +136,15 @@ Deno.serve(async (req: Request) => {
     console.error("arrivals fetchIncomingTrips:", e);
   }
 
-  let news = "";
-  const now = new Date().toISOString();
-  const { data: newsRows } = await supabase
-    .from("zet_news")
-    .select("title, lines")
-    .lte("valid_from", now)
-    .gte("valid_to", now)
-    .order("valid_to", { ascending: true })
-    .limit(5);
-  if (newsRows?.length) {
-    news = newsRows
-      .map((n: { title: string; lines: string[] | null }) => {
-        const lines = n.lines;
-        const lineStr = lines?.length ? ` (${lines.join(", ")})` : "";
-        return `${n.title}${lineStr}`;
-      })
-      .join(" · ");
-  }
-
   let color = DEFAULT_COLOR;
+  let newsText: string | null = null;
   const { data: route } = await supabase
     .from("routes")
-    .select("color")
+    .select("color, news_text")
     .eq("id", routeId)
     .single();
   if (route?.color) color = route.color;
+  if (route?.news_text) newsText = route.news_text;
 
-  return jsonResponse({ trips, news, color }, 200, origin);
+  return jsonResponse({ trips, color, news_text: newsText ?? undefined }, 200, origin);
 });
