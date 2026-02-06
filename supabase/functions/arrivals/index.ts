@@ -39,8 +39,9 @@ function jsonResponse(
 }
 
 async function fetchIncomingTrips(stopId: string): Promise<unknown[]> {
-  const url = `${TIMETABLE_URL.replace(/\/$/, "")}/stops/${encodeURIComponent(stopId)}/incoming-trips`;
-  const res = await fetch(url, { headers: ZET_HEADERS });
+  const url = `${TIMETABLE_URL.replace(/\/$/, "")}/stopIncomingTrips?stopId=${encodeURIComponent(stopId)}&isMapView=false`;
+  const res = await fetch(url, { headers: {...ZET_HEADERS, 
+    Authorization: `Bearer eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICJWaVlQSUM2aFQwVHd6SWVpUlZfaGFhZEczMXNRZGNsbUF0MnFtUTRIOHB3In0.eyJleHAiOjE3NzAzOTQwNzYsImlhdCI6MTc3MDM5MzE3NiwianRpIjoiYjgwZGMxN2ItZDQxYi00YTM2LWFhNWItZDZmYzExNmZhOTY5IiwiaXNzIjoiaHR0cHM6Ly9pYW0uemV0LmxvY2FsL3JlYWxtcy9LaW5nSUNUX1pFVF9QdWJsaWMiLCJzdWIiOiI0ZjU5NWU3Mi1mYmFkLTQ3ZTUtYWZjOC1kMDRjYWY2ZGE3NmUiLCJ0eXAiOiJCZWFyZXIiLCJhenAiOiJLaW5nSUNULlpFVC5Nb2JpbGUiLCJzZXNzaW9uX3N0YXRlIjoiMTFiMTQ1YzctNTBhMi00MTYyLWJmMzctZDAxOWFkZWQ2MTBjIiwiYWNyIjoiMSIsInJlYWxtX2FjY2VzcyI6eyJyb2xlcyI6WyJvZmZsaW5lX2FjY2VzcyIsInVtYV9hdXRob3JpemF0aW9uIiwiZGVmYXVsdC1yb2xlcy1raW5naWN0LnpldC5wdWJsaWMiXX0sInNjb3BlIjoib3BlbmlkIGNsaWVudF9pZCBwcm9maWxlIGVtYWlsIiwic2lkIjoiMTFiMTQ1YzctNTBhMi00MTYyLWJmMzctZDAxOWFkZWQ2MTBjIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsInByZWZlcnJlZF91c2VybmFtZSI6InhlamlyYXIyNDgyNDQyMjM1MDYiLCJnaXZlbl9uYW1lIjoiIiwiZmFtaWx5X25hbWUiOiIiLCJlbWFpbCI6InhlamlyYXIyNDhAZG5zY2xpY2suY29tIn0.IhqpuoL0Y8ovscpN5oXGosQyvWBYVvTVCf4NTH0THrRgh3lOcy1xf1SlvZpkLNze4SlJCFfY_NayCzUrB3e3eEZyhQxlKE_4SIMIwWaMQ7Cl2bvtk2pwS_ATYoKxhieIoRRtszFmuUwaHfHvhpg3bFdvqjxSQ4ei69cHtr7e_iQ2S90M7SEBPbzLRTYXSjh76K_csoRSi6mJLtwSeRBkTwZGCIGEPyBRN34b4XH-K7M5NSRFiKeIjkRW4nP01qhKMU6bfIxcsbmbE_OSOzBEw1fABq1UYResCk56n_9CKotSmKL_XVo784RU_ENtvWtyQh70JTqzMgq_PvOj_CmDGA` }});
   if (!res.ok) return [];
   const data = await res.json();
   return Array.isArray(data) ? data : [];

@@ -5,6 +5,9 @@
 #include <qrcode_espi.h>
 #include <DNSServer.h>
 #include <WiFiManager.h>
+#include <Preferences.h>
+#include <HTTPClient.h>
+#include <WiFiClient.h>
 
 /* The product now has two screens, and the initialization code needs a small change in the new version. The LCD_MODULE_CMD_1 is used to define the
  * switch macro. */
@@ -15,6 +18,14 @@ TFT_eSPI tft = TFT_eSPI();
 WiFiManager wm;
 
 QRcode_eSPI qrcode (&tft);
+
+// Device state management
+Preferences preferences;
+String deviceMac = "";
+String deviceSecret = "";
+bool deviceConfigured = false;
+unsigned long lastCheckTime = 0;
+const unsigned long CHECK_INTERVAL = 30000; // 30 seconds
 
 #if defined(LCD_MODULE_CMD_1)
     typedef struct {
@@ -40,6 +51,76 @@ QRcode_eSPI qrcode (&tft);
         {0xE1, {0XF0, 0X08, 0X0C, 0X0B, 0X09, 0X24, 0X2B, 0X22, 0X43, 0X38, 0X15, 0X16, 0X2F, 0X37}, 14},
     };
 #endif
+
+// Generate a 16-character random alphanumeric secret
+String generateSecret() {
+    String secret = "";
+    const char charset[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    randomSeed(ESP.getEfuseMac());
+    for (int i = 0; i < 16; i++) {
+        secret += charset[random(0, 62)];
+    }
+    return secret;
+}
+
+// Format MAC address as hex string (12 characters, no colons)
+String getMacAddress() {
+    uint64_t chipid = ESP.getEfuseMac();
+    char macStr[13];
+    sprintf(macStr, "%02X%02X%02X%02X%02X%02X", 
+        (uint8_t)(chipid>>40), (uint8_t)(chipid>>32), (uint8_t)(chipid>>24),
+        (uint8_t)(chipid>>16), (uint8_t)(chipid>>8), (uint8_t)chipid);
+    return String(macStr);
+}
+
+// Check if device exists in Supabase
+bool checkDeviceExists(String mac, String secret) {
+    HTTPClient http;
+    WiFiClient client;
+    String url = "http://172.23.224.1:54321/functions/v1/arrivals?mac=" + mac + "&secret=" + secret;
+    
+    http.begin(client, url);
+    http.setTimeout(5000); // 5 second timeout
+    int httpCode = http.GET();
+    http.end();
+    
+    Serial.print("Device check HTTP code: ");
+    Serial.println(httpCode);
+    
+    return (httpCode == 200);
+}
+
+// Display setup QR code with MAC and Secret
+void showSetupQR(String mac, String secret) {
+    // Clear screen to white background
+    tft.fillScreen(TFT_WHITE);
+    
+    // Generate QR code URL
+    String qrData = "http://172.23.224.1:3000/setup?mac=" + mac + "&id=" + secret;
+    
+    // Render QR code (centered, takes up ~116x116 area)
+    qrcode.init();
+    qrcode.create(qrData);
+    
+    // Draw left panel (Branding)
+    tft.setTextColor(TFT_BLACK);
+    tft.drawString("ZET", 15, 70, 4);
+    tft.setTextColor(0x73AE); // Zinc-500 Gray
+    tft.drawString("v1.0.4", 15, 100, 2);
+    
+    // Draw right panel (Instructions)
+    tft.setTextColor(TFT_BLACK);
+    tft.drawString("Setup", 235, 50, 2);
+    
+    tft.setTextColor(0x73AE); // Zinc-500 Gray
+    tft.drawString("Scan QR:", 235, 75, 1);
+    
+    tft.setTextColor(TFT_BLACK);
+    tft.drawString("to configure", 235, 90, 1);
+    
+    // Draw bottom bar (subtle accent)
+    tft.fillRect(0, 165, 320, 5, 0x18C3); // Zinc-900
+}
 
 void configModeCallback(WiFiManager *myWM) {
     // 1. Clear screen to White (Shadcn Light Base)
@@ -160,11 +241,70 @@ void setup()
     tft.fillScreen(TFT_BLACK);
     tft.setTextColor(TFT_GREEN);
     tft.drawCentreString("CONNECTED!", 160, 75, 4);
+    delay(1000);
+
+    // Initialize Preferences and get/retrieve device secret
+    preferences.begin("zet_device", false);
+    
+    // Get MAC address
+    deviceMac = getMacAddress();
+    Serial.print("Device MAC: ");
+    Serial.println(deviceMac);
+    
+    // Get or generate secret
+    deviceSecret = preferences.getString("secret", "");
+    if (deviceSecret.length() == 0) {
+        // Generate new secret on first boot
+        deviceSecret = generateSecret();
+        preferences.putString("secret", deviceSecret);
+        Serial.print("Generated new secret: ");
+        Serial.println(deviceSecret);
+    } else {
+        Serial.print("Retrieved secret: ");
+        Serial.println(deviceSecret);
+    }
+    
+    // Check if device is configured in Supabase
+    Serial.println("Checking device registration...");
+    if (checkDeviceExists(deviceMac, deviceSecret)) {
+        deviceConfigured = true;
+        Serial.println("Device is configured!");
+        tft.fillScreen(TFT_BLACK);
+        tft.setTextColor(TFT_GREEN);
+        tft.drawCentreString("CONFIGURED!", 160, 75, 4);
+    } else {
+        deviceConfigured = false;
+        Serial.println("Device not found, showing setup QR...");
+        showSetupQR(deviceMac, deviceSecret);
+    }
+    
+    lastCheckTime = millis();
 }
 
 void loop()
 {
-
+    // If device is not configured, check periodically
+    if (!deviceConfigured) {
+        unsigned long currentTime = millis();
+        
+        // Check every CHECK_INTERVAL (30 seconds)
+        if (currentTime - lastCheckTime >= CHECK_INTERVAL) {
+            Serial.println("Re-checking device registration...");
+            
+            if (checkDeviceExists(deviceMac, deviceSecret)) {
+                deviceConfigured = true;
+                Serial.println("Device is now configured!");
+                tft.fillScreen(TFT_BLACK);
+                tft.setTextColor(TFT_GREEN);
+                tft.drawCentreString("CONFIGURED!", 160, 75, 4);
+            } else {
+                Serial.println("Device still not configured, keeping QR code displayed.");
+            }
+            
+            lastCheckTime = currentTime;
+        }
+    }
+    // TODO: When deviceConfigured is true, fetch and display arrivals
 }
 
 
