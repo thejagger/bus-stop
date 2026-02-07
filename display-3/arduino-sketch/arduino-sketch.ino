@@ -10,10 +10,6 @@
 #include <WiFiClient.h>
 #include <ArduinoJson.h>
 
-/* The product now has two screens, and the initialization code needs a small change in the new version. The LCD_MODULE_CMD_1 is used to define the
- * switch macro. */
-#define LCD_MODULE_CMD_1
-
 DNSServer dnsServer;
 TFT_eSPI tft = TFT_eSPI();
 WiFiManager wm;
@@ -51,32 +47,6 @@ String appUrl = "10.0.0.108";
 
 // Supabase anon key - set this if you want to hardcode it (otherwise it will be loaded from Preferences)
 // Leave empty to use Preferences storage instead
-#define SUPABASE_ANON_KEY_HARDCODED ""
-
-#if defined(LCD_MODULE_CMD_1)
-    typedef struct {
-        uint8_t cmd;
-        uint8_t data[14];
-        uint8_t len;
-    } lcd_cmd_t;
-
-    lcd_cmd_t lcd_st7789v[] = {
-        {0x11, {0}, 0 | 0x80},
-        {0x3A, {0X05}, 1},
-        {0xB2, {0X0B, 0X0B, 0X00, 0X33, 0X33}, 5},
-        {0xB7, {0X75}, 1},
-        {0xBB, {0X28}, 1},
-        {0xC0, {0X2C}, 1},
-        {0xC2, {0X01}, 1},
-        {0xC3, {0X1F}, 1},
-        {0xC6, {0X13}, 1},
-        {0xD0, {0XA7}, 1},
-        {0xD0, {0XA4, 0XA1}, 2},
-        {0xD6, {0XA1}, 1},
-        {0xE0, {0XF0, 0X05, 0X0A, 0X06, 0X06, 0X03, 0X2B, 0X32, 0X43, 0X36, 0X11, 0X10, 0X2B, 0X32}, 14},
-        {0xE1, {0XF0, 0X08, 0X0C, 0X0B, 0X09, 0X24, 0X2B, 0X22, 0X43, 0X38, 0X15, 0X16, 0X2F, 0X37}, 14},
-    };
-#endif
 
 // Generate a 16-character random alphanumeric secret
 String generateSecret() {
@@ -296,17 +266,17 @@ void displayArrivals() {
     const int routeFont = 4;
     // Calculate route width: font 4 is approximately 24 pixels per character
     // Max 3 digits = 3 * 24 = 72 pixels, add padding for safety
-    const int routeWidth = 80; // Safe width for max 3 digits with font 4
+    const int routeWidth = 72; // Safe width for max 3 digits with font 4
     const int timeX = 318; // Right-aligned time
-    const int headsignX = routeX + routeWidth + 5; // Start of headsign (right after route with spacing)
+    const int headsignX = routeX + routeWidth + 2; // Start of headsign (right after route with spacing)
     const int headsignWidth = timeX - headsignX - 10; // Width available (leave space for time on right)
     
 
     for (int i = 0; i < tripCount && i < 4; i++) {
         int y = startY[i] + (rowHeight / 2); // Center vertically in row
         
-        // Set text color
-        tft.setTextColor(TFT_BLUE);
+        // Set text color (use defaultColor from API, fallback to TFT_YELLOW)
+        tft.setTextColor(defaultColor);
         
         // Left: routeShortName (fixed width, max 3 digits, font 4)
         tft.setTextDatum(ML_DATUM); // Top-left alignment
@@ -394,22 +364,14 @@ void setup()
 
     tft.begin();
 
-    #if defined(LCD_MODULE_CMD_1)
-        for (uint8_t i = 0; i < (sizeof(lcd_st7789v) / sizeof(lcd_cmd_t)); i++) {
-            tft.writecommand(lcd_st7789v[i].cmd);
-            for (int j = 0; j < (lcd_st7789v[i].len & 0x7f); j++) {
-                tft.writedata(lcd_st7789v[i].data[j]);
-            }
-
-            if (lcd_st7789v[i].len & 0x80) {
-                delay(120);
-            }
-        }
-    #endif
-
     tft.setRotation(3);
-    tft.setSwapBytes(true);
+    // setSwapBytes(true) swaps byte order - needed for images but causes color inversion for text
+    // Since we're not using images currently, keep it false for correct text colors
+    tft.setSwapBytes(false);
+    // If you need to display images later, set swapBytes(true) before pushImage, then set back to false
+    // tft.setSwapBytes(true);
     // tft.pushImage(0, 0, 320, 170, (uint16_t *)img_logo);
+    // tft.setSwapBytes(false);
     // delay(2000);
 
     #if ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(5,0,0)

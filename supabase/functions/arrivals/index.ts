@@ -180,8 +180,8 @@ Deno.serve(async (req: Request) => {
                     }
 
                     let arrivalTimeString: string = "";
-                    if (arrivalTime > 60) {
-                        arrivalTimeString = new Date(t.expectedArrivalDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    if (arrivalTime > 20) {
+                        arrivalTimeString = new Date(t.expectedArrivalDateTime).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
                     } else {
                         arrivalTimeString = `${arrivalTime} min`;
                     }
