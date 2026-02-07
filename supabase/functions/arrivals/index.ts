@@ -9,7 +9,7 @@ import {createClient} from "npm:@supabase/supabase-js@2";
 const ZET_BASE = "https://api.zet.hr";
 const TIMETABLE_URL = `${ZET_BASE}/TimetableService.Api/api/gtfs`;
 const AUTH_URL = `${ZET_BASE}/AuthService.Api/api/auth/login`;
-const DEFAULT_COLOR = "#FFCC00";
+const DEFAULT_COLOR = 0xFFE0;
 
 const ZET_HEADERS: Record<string, string> = {
     accept: "application/json, text/plain, */*",
@@ -147,10 +147,9 @@ Deno.serve(async (req: Request) => {
 
     let trips: Array<{
         routeShortName: string;
-        trips: Array<{
-            headsign: string;
-            arrivalTimeMinutes: number;
-        }>
+        headsign: string;
+        arrivalTime: number;
+        arrivalTimeString: string;
     }> = [];
 
     if (config && config?.length > 0) {
@@ -171,24 +170,48 @@ Deno.serve(async (req: Request) => {
                 );
                 const nextTwo = forRoute.slice(0, 2);
 
-                trips.push({
-                    routeShortName: String(String(routeId)),
-                    trips: nextTwo.map((t) => {
-                        const expectedArrivalDateTime = new Date(t.expectedArrivalDateTime);
-                        const now = new Date();
+                trips.push(...nextTwo.map((t) => {
+                    const expectedArrivalDateTime = new Date(t.expectedArrivalDateTime).getTime();
+                    const now = new Date().getTime();
+                    let arrivalTime: number = 0;
 
-                        console.log(t.expectedArrivalDateTime);
+                    if (expectedArrivalDateTime > now) {
+                        arrivalTime = Math.floor((expectedArrivalDateTime - now) / 60000);
+                    }
 
-                        return {
-                            headsign: t.headsign,
-                            arrivalTimeMinutes: Math.floor(Math.abs((expectedArrivalDateTime.getTime() - now.getTime()) / 60000)),
-                        }
-                    })
-                })
+                    let arrivalTimeString: string = "";
+                    if (arrivalTime > 60) {
+                        arrivalTimeString = new Date(t.expectedArrivalDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    } else {
+                        arrivalTimeString = `${arrivalTime} min`;
+                    }
+
+                    return {
+                        routeShortName: t.routeShortName,
+                        headsign: t.headsign,
+                        arrivalTime: arrivalTime,
+                        arrivalTimeString: arrivalTimeString,
+                    };
+                }));
             } catch (e) {
                 console.error("arrivals fetchIncomingTrips:", e);
             }
         }
+
+        // Sort trips by arrivalTime, then by routeShortName as integer fallback
+        trips = trips.sort((a, b) => {
+            if (a.arrivalTime !== b.arrivalTime) {
+                return a.arrivalTime - b.arrivalTime;
+            }
+            // fallback: compare routeShortName as integer, fallback to string compare if NaN
+            const aRoute = Number(a.routeShortName);
+            const bRoute = Number(b.routeShortName);
+            if (!Number.isNaN(aRoute) && !Number.isNaN(bRoute)) {
+                return aRoute - bRoute;
+            } else {
+                return String(a.routeShortName).localeCompare(String(b.routeShortName));
+            }
+        }).slice(0, 4);
     }
 
     return jsonResponse({trips, DEFAULT_COLOR}, 200, origin);

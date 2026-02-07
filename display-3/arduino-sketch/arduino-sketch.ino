@@ -31,24 +31,17 @@ const unsigned long CHECK_INTERVAL = 30000; // 30 seconds
 
 // Arrivals data structures
 struct TripData {
-    String headsign;
-    int arrivalTimeMinutes;
-};
-
-struct RouteData {
     String routeShortName;
-    TripData trips[10]; // Max 10 trips per route
-    int tripCount;
-    int currentTripIndex;
+    String headsign;
+    String arrivalTimeString;
+    int arrivalTime;
 };
 
-RouteData routes[3]; // Max 3 routes
-int routeCount = 0;
-uint16_t defaultColor = TFT_YELLOW; // Default to yellow if color parsing fails
+TripData trips[4]; // Max 4 trips to display
+int tripCount = 0;
+uint16_t defaultColor = 65504; // Default color (0xFFE0)
 unsigned long lastFetchTime = 0;
-unsigned long lastRotationTime = 0;
 const unsigned long FETCH_INTERVAL = 30000; // 30 seconds
-const unsigned long ROTATION_INTERVAL = 5000; // 5 seconds
 bool dataFetched = false;
 
 // Supabase configuration - can be changed via Preferences if needed
@@ -106,34 +99,10 @@ String getMacAddress() {
     return String(macStr);
 }
 
-// Convert hex color string (#RRGGBB) to RGB565 format
-uint16_t hexToRgb565(String hex) {
-    // Remove '#' if present
-    if (hex.startsWith("#")) {
-        hex = hex.substring(1);
-    }
-    
-    // Ensure we have 6 characters
-    if (hex.length() != 6) {
-        return TFT_YELLOW; // Default color
-    }
-    
-    // Convert hex string to integers
-    long number = strtol(hex.c_str(), NULL, 16);
-    
-    // Extract RGB components
-    uint8_t r = (number >> 16) & 0xFF;
-    uint8_t g = (number >> 8) & 0xFF;
-    uint8_t b = number & 0xFF;
-    
-    // Convert to RGB565 (5 bits red, 6 bits green, 5 bits blue)
-    return ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3);
-}
-
 // Parse arrivals JSON response
 bool parseArrivalsJson(String json) {
-    // Reset route count
-    routeCount = 0;
+    // Reset trip count
+    tripCount = 0;
     
     // Parse JSON
     StaticJsonDocument<2048> doc;
@@ -145,14 +114,11 @@ bool parseArrivalsJson(String json) {
         return false;
     }
     
-    // Extract DEFAULT_COLOR
+    // Extract DEFAULT_COLOR (already in RGB565 format)
     if (doc.containsKey("DEFAULT_COLOR")) {
-        String colorHex = doc["DEFAULT_COLOR"].as<String>();
-        defaultColor = hexToRgb565(colorHex);
+        defaultColor = doc["DEFAULT_COLOR"].as<uint16_t>();
         Serial.print("Parsed color: ");
-        Serial.print(colorHex);
-        Serial.print(" -> RGB565: 0x");
-        Serial.println(defaultColor, HEX);
+        Serial.println(defaultColor);
     }
     
     // Extract trips array
@@ -163,48 +129,39 @@ bool parseArrivalsJson(String json) {
     
     JsonArray tripsArray = doc["trips"].as<JsonArray>();
     
-    // Process up to 3 routes
-    int routeIdx = 0;
-    for (JsonObject routeObj : tripsArray) {
-        if (routeIdx >= 3) break; // Max 3 routes
+    // Process up to 4 trips (already sorted by API)
+    int tripIdx = 0;
+    for (JsonObject tripObj : tripsArray) {
+        if (tripIdx >= 4) break; // Max 4 trips to display
         
-        // Get routeShortName
-        if (!routeObj.containsKey("routeShortName")) {
+        // Get required fields
+        if (!tripObj.containsKey("routeShortName") || 
+            !tripObj.containsKey("headsign") || 
+            !tripObj.containsKey("arrivalTimeString")) {
             continue;
         }
         
-        routes[routeIdx].routeShortName = routeObj["routeShortName"].as<String>();
-        routes[routeIdx].tripCount = 0;
-        routes[routeIdx].currentTripIndex = 0;
+        trips[tripIdx].routeShortName = tripObj["routeShortName"].as<String>();
+        trips[tripIdx].headsign = tripObj["headsign"].as<String>();
+        trips[tripIdx].arrivalTimeString = tripObj["arrivalTimeString"].as<String>();
         
-        // Get trips array for this route
-        if (routeObj.containsKey("trips") && routeObj["trips"].is<JsonArray>()) {
-            JsonArray routeTripsArray = routeObj["trips"].as<JsonArray>();
-            
-            int tripIdx = 0;
-            for (JsonObject tripObj : routeTripsArray) {
-                if (tripIdx >= 10) break; // Max 10 trips per route
-                
-                if (tripObj.containsKey("headsign") && tripObj.containsKey("arrivalTimeMinutes")) {
-                    routes[routeIdx].trips[tripIdx].headsign = tripObj["headsign"].as<String>();
-                    routes[routeIdx].trips[tripIdx].arrivalTimeMinutes = tripObj["arrivalTimeMinutes"].as<int>();
-                    tripIdx++;
-                }
-            }
-            
-            routes[routeIdx].tripCount = tripIdx;
+        // Get arrivalTime if available (optional)
+        if (tripObj.containsKey("arrivalTime")) {
+            trips[tripIdx].arrivalTime = tripObj["arrivalTime"].as<int>();
+        } else {
+            trips[tripIdx].arrivalTime = 0;
         }
         
-        routeIdx++;
+        tripIdx++;
     }
     
-    routeCount = routeIdx;
+    tripCount = tripIdx;
     
     Serial.print("Parsed ");
-    Serial.print(routeCount);
-    Serial.println(" routes");
+    Serial.print(tripCount);
+    Serial.println(" trips");
     
-    return (routeCount > 0);
+    return (tripCount > 0);
 }
 
 // Save Supabase anon key to Preferences
@@ -305,36 +262,13 @@ bool fetchArrivalsData() {
     return success;
 }
 
-// Test basic connectivity to Supabase host
-bool testSupabaseConnection() {
-    WiFiClient testClient;
-    Serial.print("Testing connection to ");
-    Serial.print(supabaseHost);
-    Serial.print(":");
-    Serial.println(supabasePort);
-    
-    if (!testClient.connect(supabaseHost.c_str(), supabasePort)) {
-        Serial.println("Connection test FAILED - cannot connect to Supabase host");
-        Serial.println("Make sure:");
-        Serial.println("1. Supabase is running (supabase start)");
-        Serial.println("2. Your PC's IP is correct (currently: " + supabaseHost + ")");
-        Serial.println("3. Firewall allows port " + String(supabasePort));
-        Serial.println("4. Supabase is listening on all interfaces (not just localhost)");
-        return false;
-    }
-    
-    Serial.println("Connection test SUCCESS - host is reachable");
-    testClient.stop();
-    return true;
-}
-
-// Rotate trips for all routes
-void rotateTrips() {
-    for (int i = 0; i < routeCount; i++) {
-        if (routes[i].tripCount > 0) {
-            routes[i].currentTripIndex = (routes[i].currentTripIndex + 1) % routes[i].tripCount;
-        }
-    }
+void drawGrid(int spacing = 10) {
+  for (int x = 0; x < tft.width(); x += spacing) {
+    tft.drawLine(x, 0, x, tft.height(), TFT_SILVER);
+  }
+  for (int y = 0; y < tft.height(); y += spacing) {
+    tft.drawLine(0, y, tft.width(), y, TFT_SILVER);
+  }
 }
 
 // Display arrivals data on screen
@@ -342,50 +276,48 @@ void displayArrivals() {
     // Clear screen with black background
     tft.fillScreen(TFT_BLACK);
     
-    if (routeCount == 0) {
+    // drawGrid();
+
+    if (tripCount == 0) {
         // No data available
         tft.setTextColor(defaultColor);
         tft.drawCentreString("No arrivals", 160, 75, 2);
         return;
     }
     
-    // Display up to 3 routes
-    // Row height: ~56 pixels (170 / 3 = ~56px)
-    // Row 1: y = 0-56, Row 2: y = 56-112, Row 3: y = 112-168
-    const int rowHeight = 56;
-    const int startY[3] = {0, 56, 112};
+    // Display up to 4 trips
+    // Row height: ~42 pixels (170 / 4 = ~42px)
+    // Row 1: y = 0-42, Row 2: y = 42-84, Row 3: y = 84-126, Row 4: y = 126-168
+    const int rowHeight = 42;
+    const int startY[4] = {2, 44, 86, 128};
     
-    for (int i = 0; i < routeCount && i < 3; i++) {
-        int y = startY[i] + (rowHeight / 2) - 10; // Center vertically in row
-        
-        // Get current trip for this route
-        if (routes[i].tripCount == 0) {
-            continue; // Skip routes with no trips
-        }
-        
-        int tripIdx = routes[i].currentTripIndex;
-        TripData* trip = &routes[i].trips[tripIdx];
+    // Fixed positions
+    const int routeX = 2; // Start of route number
+    const int routeFont = 4;
+    // Calculate route width: font 4 is approximately 24 pixels per character
+    // Max 3 digits = 3 * 24 = 72 pixels, add padding for safety
+    const int routeWidth = 80; // Safe width for max 3 digits with font 4
+    const int timeX = 318; // Right-aligned time
+    const int headsignX = routeX + routeWidth + 5; // Start of headsign (right after route with spacing)
+    const int headsignWidth = timeX - headsignX - 10; // Width available (leave space for time on right)
+    
+
+    for (int i = 0; i < tripCount && i < 4; i++) {
+        int y = startY[i] + (rowHeight / 2); // Center vertically in row
         
         // Set text color
-        tft.setTextColor(defaultColor);
+        tft.setTextColor(TFT_BLUE);
         
-        // Left: routeShortName (x: 0-40)
-        tft.setTextDatum(TL_DATUM); // Top-left alignment
-        tft.drawString(routes[i].routeShortName, 5, y, 4);
+        // Left: routeShortName (fixed width, max 3 digits, font 4)
+        tft.setTextDatum(ML_DATUM); // Top-left alignment
+        tft.drawString(trips[i].routeShortName, routeX, y, routeFont);
+
+        tft.setTextDatum(ML_DATUM); // Top-left alignment
+        tft.drawString(trips[i].headsign, headsignX, y, routeFont);
         
-        // Middle: headsign (x: 40-200)
-        tft.setTextDatum(TC_DATUM); // Top-center alignment
-        // Truncate headsign if too long (max ~15 chars for font 2)
-        String headsign = trip->headsign;
-        if (headsign.length() > 15) {
-            headsign = headsign.substring(0, 12) + "...";
-        }
-        tft.drawString(headsign, 160, y + 5, 2);
-        
-        // Right: arrivalTimeMinutes (x: 200-320)
-        tft.setTextDatum(TR_DATUM); // Top-right alignment
-        String minutesStr = String(trip->arrivalTimeMinutes);
-        tft.drawString(minutesStr, 315, y, 4);
+        // Right: arrivalTimeString (font 4)
+        tft.setTextDatum(MR_DATUM); // Top-right alignment
+        tft.drawString(trips[i].arrivalTimeString, timeX, y, routeFont);
     }
 }
 
@@ -477,8 +409,8 @@ void setup()
 
     tft.setRotation(3);
     tft.setSwapBytes(true);
-    tft.pushImage(0, 0, 320, 170, (uint16_t *)img_logo);
-    delay(2000);
+    // tft.pushImage(0, 0, 320, 170, (uint16_t *)img_logo);
+    // delay(2000);
 
     #if ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(5,0,0)
         ledcSetup(0, 2000, 8);
@@ -538,7 +470,7 @@ void setup()
     }
 
     tft.fillScreen(TFT_BLACK);
-    tft.setTextColor(TFT_GREEN);
+    tft.setTextColor(TFT_YELLOW);
     tft.drawCentreString("CONNECTED!", 160, 75, 4);
     
     // Wait for WiFi to stabilize
@@ -581,16 +513,6 @@ void setup()
     if (fetchArrivalsData()) {
         deviceConfigured = true;
         Serial.println("Device is configured!");
-        tft.fillScreen(TFT_BLACK);
-        tft.setTextColor(TFT_GREEN);
-        tft.drawCentreString("CONFIGURED!", 160, 75, 4);
-        
-        // Initialize timers for arrivals display
-        lastFetchTime = millis();
-        lastRotationTime = millis();
-        
-        // Display arrivals immediately
-        delay(1000); // Brief delay to show "CONFIGURED!" message
         displayArrivals();
     } else {
         deviceConfigured = false;
@@ -614,13 +536,9 @@ void loop()
             if (fetchArrivalsData()) {
                 deviceConfigured = true;
                 Serial.println("Device is now configured!");
-                tft.fillScreen(TFT_BLACK);
-                tft.setTextColor(TFT_GREEN);
-                tft.drawCentreString("CONFIGURED!", 160, 75, 4);
                 
                 // Initialize timers for arrivals display
                 lastFetchTime = currentTime;
-                lastRotationTime = currentTime;
                 
                 // Display arrivals immediately
                 displayArrivals();
@@ -640,14 +558,6 @@ void loop()
                 displayArrivals();
             }
             lastFetchTime = currentTime;
-            lastRotationTime = currentTime; // Reset rotation timer after fetch
-        }
-        
-        // Rotate trips every ROTATION_INTERVAL (5 seconds)
-        if (dataFetched && (currentTime - lastRotationTime >= ROTATION_INTERVAL)) {
-            rotateTrips();
-            displayArrivals();
-            lastRotationTime = currentTime;
         }
     }
 }
