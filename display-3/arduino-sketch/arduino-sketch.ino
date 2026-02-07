@@ -8,6 +8,7 @@
 #include <Preferences.h>
 #include <HTTPClient.h>
 #include <WiFiClient.h>
+#include <ArduinoJson.h>
 
 /* The product now has two screens, and the initialization code needs a small change in the new version. The LCD_MODULE_CMD_1 is used to define the
  * switch macro. */
@@ -23,9 +24,41 @@ QRcode_eSPI qrcode (&tft);
 Preferences preferences;
 String deviceMac = "";
 String deviceSecret = "";
+String supabaseAnonKey = ""; // Supabase anon key (required for Edge Function authentication)
 bool deviceConfigured = false;
 unsigned long lastCheckTime = 0;
 const unsigned long CHECK_INTERVAL = 30000; // 30 seconds
+
+// Arrivals data structures
+struct TripData {
+    String headsign;
+    int arrivalTimeMinutes;
+};
+
+struct RouteData {
+    String routeShortName;
+    TripData trips[10]; // Max 10 trips per route
+    int tripCount;
+    int currentTripIndex;
+};
+
+RouteData routes[3]; // Max 3 routes
+int routeCount = 0;
+uint16_t defaultColor = TFT_YELLOW; // Default to yellow if color parsing fails
+unsigned long lastFetchTime = 0;
+unsigned long lastRotationTime = 0;
+const unsigned long FETCH_INTERVAL = 30000; // 30 seconds
+const unsigned long ROTATION_INTERVAL = 5000; // 5 seconds
+bool dataFetched = false;
+
+// Supabase configuration - can be changed via Preferences if needed
+String supabaseHost = "10.0.0.108";
+int supabasePort = 54321;
+String appUrl = "10.0.0.108";
+
+// Supabase anon key - set this if you want to hardcode it (otherwise it will be loaded from Preferences)
+// Leave empty to use Preferences storage instead
+#define SUPABASE_ANON_KEY_HARDCODED ""
 
 #if defined(LCD_MODULE_CMD_1)
     typedef struct {
@@ -73,21 +106,287 @@ String getMacAddress() {
     return String(macStr);
 }
 
-// Check if device exists in Supabase
-bool checkDeviceExists(String mac, String secret) {
+// Convert hex color string (#RRGGBB) to RGB565 format
+uint16_t hexToRgb565(String hex) {
+    // Remove '#' if present
+    if (hex.startsWith("#")) {
+        hex = hex.substring(1);
+    }
+    
+    // Ensure we have 6 characters
+    if (hex.length() != 6) {
+        return TFT_YELLOW; // Default color
+    }
+    
+    // Convert hex string to integers
+    long number = strtol(hex.c_str(), NULL, 16);
+    
+    // Extract RGB components
+    uint8_t r = (number >> 16) & 0xFF;
+    uint8_t g = (number >> 8) & 0xFF;
+    uint8_t b = number & 0xFF;
+    
+    // Convert to RGB565 (5 bits red, 6 bits green, 5 bits blue)
+    return ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3);
+}
+
+// Parse arrivals JSON response
+bool parseArrivalsJson(String json) {
+    // Reset route count
+    routeCount = 0;
+    
+    // Parse JSON
+    StaticJsonDocument<2048> doc;
+    DeserializationError error = deserializeJson(doc, json);
+    
+    if (error) {
+        Serial.print("JSON parsing failed: ");
+        Serial.println(error.c_str());
+        return false;
+    }
+    
+    // Extract DEFAULT_COLOR
+    if (doc.containsKey("DEFAULT_COLOR")) {
+        String colorHex = doc["DEFAULT_COLOR"].as<String>();
+        defaultColor = hexToRgb565(colorHex);
+        Serial.print("Parsed color: ");
+        Serial.print(colorHex);
+        Serial.print(" -> RGB565: 0x");
+        Serial.println(defaultColor, HEX);
+    }
+    
+    // Extract trips array
+    if (!doc.containsKey("trips") || !doc["trips"].is<JsonArray>()) {
+        Serial.println("No trips array found in JSON");
+        return false;
+    }
+    
+    JsonArray tripsArray = doc["trips"].as<JsonArray>();
+    
+    // Process up to 3 routes
+    int routeIdx = 0;
+    for (JsonObject routeObj : tripsArray) {
+        if (routeIdx >= 3) break; // Max 3 routes
+        
+        // Get routeShortName
+        if (!routeObj.containsKey("routeShortName")) {
+            continue;
+        }
+        
+        routes[routeIdx].routeShortName = routeObj["routeShortName"].as<String>();
+        routes[routeIdx].tripCount = 0;
+        routes[routeIdx].currentTripIndex = 0;
+        
+        // Get trips array for this route
+        if (routeObj.containsKey("trips") && routeObj["trips"].is<JsonArray>()) {
+            JsonArray routeTripsArray = routeObj["trips"].as<JsonArray>();
+            
+            int tripIdx = 0;
+            for (JsonObject tripObj : routeTripsArray) {
+                if (tripIdx >= 10) break; // Max 10 trips per route
+                
+                if (tripObj.containsKey("headsign") && tripObj.containsKey("arrivalTimeMinutes")) {
+                    routes[routeIdx].trips[tripIdx].headsign = tripObj["headsign"].as<String>();
+                    routes[routeIdx].trips[tripIdx].arrivalTimeMinutes = tripObj["arrivalTimeMinutes"].as<int>();
+                    tripIdx++;
+                }
+            }
+            
+            routes[routeIdx].tripCount = tripIdx;
+        }
+        
+        routeIdx++;
+    }
+    
+    routeCount = routeIdx;
+    
+    Serial.print("Parsed ");
+    Serial.print(routeCount);
+    Serial.println(" routes");
+    
+    return (routeCount > 0);
+}
+
+// Save Supabase anon key to Preferences
+void saveSupabaseAnonKey(String key) {
+    preferences.begin("zet_device", false);
+    preferences.putString("supabase_anon_key", key);
+    preferences.end();
+    supabaseAnonKey = key;
+    Serial.println("Supabase anon key saved to Preferences");
+}
+
+// Load Supabase anon key from Preferences or hardcoded value
+void loadSupabaseAnonKey() {
+    // Check if hardcoded key is set (non-empty)
+    String hardcodedKey = String(SUPABASE_ANON_KEY_HARDCODED);
+    if (hardcodedKey.length() > 0) {
+        supabaseAnonKey = hardcodedKey;
+        Serial.println("Using hardcoded Supabase anon key");
+        return;
+    }
+    
+    // Otherwise load from Preferences
+    preferences.begin("zet_device", false);
+    supabaseAnonKey = preferences.getString("supabase_anon_key", "");
+    preferences.end();
+    
+    if (supabaseAnonKey.length() > 0) {
+        Serial.println("Supabase anon key loaded from Preferences");
+    } else {
+        Serial.println("WARNING: No Supabase anon key found!");
+        Serial.println("Set SUPABASE_ANON_KEY_HARDCODED or configure via setup.");
+        Serial.println("Edge Function requests will fail without authentication.");
+    }
+}
+
+// Add Authorization header to HTTP client if anon key is available
+void addAuthHeader(HTTPClient& http) {
+    if (supabaseAnonKey.length() > 0) {
+        http.addHeader("Authorization", "Bearer " + supabaseAnonKey);
+        Serial.println("Added Supabase anon key to Authorization header");
+    } else {
+        Serial.println("WARNING: No Supabase anon key configured - request may fail!");
+    }
+}
+
+// Fetch arrivals data from API
+bool fetchArrivalsData() {
+    // Check WiFi connection first
+    if (WiFi.status() != WL_CONNECTED) {
+        Serial.println("WiFi not connected for arrivals fetch!");
+        return false;
+    }
+    
     HTTPClient http;
     WiFiClient client;
-    String url = "http://172.23.224.1:54321/functions/v1/arrivals?mac=" + mac + "&secret=" + secret;
     
-    http.begin(client, url);
-    http.setTimeout(5000); // 5 second timeout
+    // Build URL with configurable host/port
+    String url = "http://" + supabaseHost + ":" + String(supabasePort) + "/functions/v1/arrivals?mac=" + deviceMac + "&secret=" + deviceSecret;
+    
+    Serial.print("Fetching arrivals from: ");
+    Serial.println(url);
+    
+    if (!http.begin(client, url)) {
+        Serial.println("HTTP begin failed!");
+        return false;
+    }
+    
+    // Add Authorization header
+    addAuthHeader(http);
+    
+    http.setTimeout(10000); // 10 second timeout
+    http.setConnectTimeout(5000); // 5 second connect timeout
+    
     int httpCode = http.GET();
+    
+    bool success = false;
+    if (httpCode == 200) {
+        String payload = http.getString();
+        Serial.print("Received payload length: ");
+        Serial.println(payload.length());
+        
+        // Parse JSON
+        if (parseArrivalsJson(payload)) {
+            success = true;
+            dataFetched = true;
+            Serial.println("Successfully fetched and parsed arrivals data");
+        } else {
+            Serial.println("Failed to parse arrivals JSON");
+        }
+    } else {
+        Serial.print("HTTP GET failed, error code: ");
+        Serial.print(httpCode);
+        Serial.print(" - ");
+        Serial.println(http.errorToString(httpCode));
+    }
+    
     http.end();
+    return success;
+}
+
+// Test basic connectivity to Supabase host
+bool testSupabaseConnection() {
+    WiFiClient testClient;
+    Serial.print("Testing connection to ");
+    Serial.print(supabaseHost);
+    Serial.print(":");
+    Serial.println(supabasePort);
     
-    Serial.print("Device check HTTP code: ");
-    Serial.println(httpCode);
+    if (!testClient.connect(supabaseHost.c_str(), supabasePort)) {
+        Serial.println("Connection test FAILED - cannot connect to Supabase host");
+        Serial.println("Make sure:");
+        Serial.println("1. Supabase is running (supabase start)");
+        Serial.println("2. Your PC's IP is correct (currently: " + supabaseHost + ")");
+        Serial.println("3. Firewall allows port " + String(supabasePort));
+        Serial.println("4. Supabase is listening on all interfaces (not just localhost)");
+        return false;
+    }
     
-    return (httpCode == 200);
+    Serial.println("Connection test SUCCESS - host is reachable");
+    testClient.stop();
+    return true;
+}
+
+// Rotate trips for all routes
+void rotateTrips() {
+    for (int i = 0; i < routeCount; i++) {
+        if (routes[i].tripCount > 0) {
+            routes[i].currentTripIndex = (routes[i].currentTripIndex + 1) % routes[i].tripCount;
+        }
+    }
+}
+
+// Display arrivals data on screen
+void displayArrivals() {
+    // Clear screen with black background
+    tft.fillScreen(TFT_BLACK);
+    
+    if (routeCount == 0) {
+        // No data available
+        tft.setTextColor(defaultColor);
+        tft.drawCentreString("No arrivals", 160, 75, 2);
+        return;
+    }
+    
+    // Display up to 3 routes
+    // Row height: ~56 pixels (170 / 3 = ~56px)
+    // Row 1: y = 0-56, Row 2: y = 56-112, Row 3: y = 112-168
+    const int rowHeight = 56;
+    const int startY[3] = {0, 56, 112};
+    
+    for (int i = 0; i < routeCount && i < 3; i++) {
+        int y = startY[i] + (rowHeight / 2) - 10; // Center vertically in row
+        
+        // Get current trip for this route
+        if (routes[i].tripCount == 0) {
+            continue; // Skip routes with no trips
+        }
+        
+        int tripIdx = routes[i].currentTripIndex;
+        TripData* trip = &routes[i].trips[tripIdx];
+        
+        // Set text color
+        tft.setTextColor(defaultColor);
+        
+        // Left: routeShortName (x: 0-40)
+        tft.setTextDatum(TL_DATUM); // Top-left alignment
+        tft.drawString(routes[i].routeShortName, 5, y, 4);
+        
+        // Middle: headsign (x: 40-200)
+        tft.setTextDatum(TC_DATUM); // Top-center alignment
+        // Truncate headsign if too long (max ~15 chars for font 2)
+        String headsign = trip->headsign;
+        if (headsign.length() > 15) {
+            headsign = headsign.substring(0, 12) + "...";
+        }
+        tft.drawString(headsign, 160, y + 5, 2);
+        
+        // Right: arrivalTimeMinutes (x: 200-320)
+        tft.setTextDatum(TR_DATUM); // Top-right alignment
+        String minutesStr = String(trip->arrivalTimeMinutes);
+        tft.drawString(minutesStr, 315, y, 4);
+    }
 }
 
 // Display setup QR code with MAC and Secret
@@ -96,7 +395,7 @@ void showSetupQR(String mac, String secret) {
     tft.fillScreen(TFT_WHITE);
     
     // Generate QR code URL
-    String qrData = "http://172.23.224.1:3000/setup?mac=" + mac + "&id=" + secret;
+    String qrData = "http://" + appUrl + ":3000/setup?mac=" + mac + "&id=" + secret;
     
     // Render QR code (centered, takes up ~116x116 area)
     qrcode.init();
@@ -241,7 +540,17 @@ void setup()
     tft.fillScreen(TFT_BLACK);
     tft.setTextColor(TFT_GREEN);
     tft.drawCentreString("CONNECTED!", 160, 75, 4);
-    delay(1000);
+    
+    // Wait for WiFi to stabilize
+    delay(2000);
+    
+    // Verify WiFi connection
+    Serial.print("WiFi SSID: ");
+    Serial.println(WiFi.SSID());
+    Serial.print("WiFi IP: ");
+    Serial.println(WiFi.localIP());
+    Serial.print("WiFi RSSI: ");
+    Serial.println(WiFi.RSSI());
 
     // Initialize Preferences and get/retrieve device secret
     preferences.begin("zet_device", false);
@@ -264,14 +573,25 @@ void setup()
         Serial.println(deviceSecret);
     }
     
-    // Check if device is configured in Supabase
+    // Load Supabase anon key if available
+    loadSupabaseAnonKey();
+    
+    // Check if device is configured in Supabase by fetching arrivals data
     Serial.println("Checking device registration...");
-    if (checkDeviceExists(deviceMac, deviceSecret)) {
+    if (fetchArrivalsData()) {
         deviceConfigured = true;
         Serial.println("Device is configured!");
         tft.fillScreen(TFT_BLACK);
         tft.setTextColor(TFT_GREEN);
         tft.drawCentreString("CONFIGURED!", 160, 75, 4);
+        
+        // Initialize timers for arrivals display
+        lastFetchTime = millis();
+        lastRotationTime = millis();
+        
+        // Display arrivals immediately
+        delay(1000); // Brief delay to show "CONFIGURED!" message
+        displayArrivals();
     } else {
         deviceConfigured = false;
         Serial.println("Device not found, showing setup QR...");
@@ -283,28 +603,53 @@ void setup()
 
 void loop()
 {
+    unsigned long currentTime = millis();
+    
     // If device is not configured, check periodically
     if (!deviceConfigured) {
-        unsigned long currentTime = millis();
-        
         // Check every CHECK_INTERVAL (30 seconds)
         if (currentTime - lastCheckTime >= CHECK_INTERVAL) {
             Serial.println("Re-checking device registration...");
             
-            if (checkDeviceExists(deviceMac, deviceSecret)) {
+            if (fetchArrivalsData()) {
                 deviceConfigured = true;
                 Serial.println("Device is now configured!");
                 tft.fillScreen(TFT_BLACK);
                 tft.setTextColor(TFT_GREEN);
                 tft.drawCentreString("CONFIGURED!", 160, 75, 4);
+                
+                // Initialize timers for arrivals display
+                lastFetchTime = currentTime;
+                lastRotationTime = currentTime;
+                
+                // Display arrivals immediately
+                displayArrivals();
             } else {
                 Serial.println("Device still not configured, keeping QR code displayed.");
             }
             
             lastCheckTime = currentTime;
         }
+    } else {
+        // Device is configured - handle arrivals display
+        
+        // Fetch new data every FETCH_INTERVAL (30 seconds)
+        if (currentTime - lastFetchTime >= FETCH_INTERVAL) {
+            Serial.println("Fetching new arrivals data...");
+            if (fetchArrivalsData()) {
+                displayArrivals();
+            }
+            lastFetchTime = currentTime;
+            lastRotationTime = currentTime; // Reset rotation timer after fetch
+        }
+        
+        // Rotate trips every ROTATION_INTERVAL (5 seconds)
+        if (dataFetched && (currentTime - lastRotationTime >= ROTATION_INTERVAL)) {
+            rotateTrips();
+            displayArrivals();
+            lastRotationTime = currentTime;
+        }
     }
-    // TODO: When deviceConfigured is true, fetch and display arrivals
 }
 
 
