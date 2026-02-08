@@ -22,7 +22,7 @@ The "Ticker": Dedicate the bottom 20-30 pixels of the screen to a scrolling "New
 
 Color Conversion: Use a Hex-to-RGB565 function so the backend can remotely trigger "Christmas Mode" (Red/Green) or "Standard Mode" (Yellow).
 
-2. Web Dashboard (Next.js + Leaflet)
+2. Web Dashboard (sveltekit + Leaflet)
 Objective: A "Premium" configuration map where users manage their hardware "Wallet."
 
 Leaflet Integration:
@@ -35,7 +35,7 @@ User Selection Flow:
 
 User clicks a stop on the map.
 
-next.js displays the specific Routes passing through that stop (Route IDs already include direction).
+sveltekit displays the specific Routes passing through that stop (Route IDs already include direction).
 
 User selects their preferred Route.
 
@@ -79,7 +79,7 @@ Step 3: The Middleware Function
 Deploy a Supabase Edge Function that successfully talks to the ZET API and returns a "Hello World" arrival to your device.
 
 Step 4: The Map Dashboard
-Build the next.js frontend. Implement the "Setup" URL listener that grabs the MAC/Secret and lets you pick a stop from the Leaflet map.
+Build the sveltekit frontend. Implement the "Setup" URL listener that grabs the MAC/Secret and lets you pick a stop from the Leaflet map.
 
 Step 5: The "Live" Connection
 Connect the dots. Save the Stop/Route ID from the map to Supabase. Make the T-Display S3 fetch that specific data every 60 seconds.

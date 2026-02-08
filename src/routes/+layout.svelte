@@ -4,6 +4,7 @@
     import favicon from '$lib/assets/favicon.svg';
     import {invalidate} from '$app/navigation'
     import {onMount} from 'svelte'
+    import Navigation from '$lib/components/Navigation.svelte';
 
     let {data, children} = $props();
     let {supabase, session} = $derived(data)
@@ -22,4 +23,8 @@
     <link rel="icon" href={favicon}/>
 </svelte:head>
 
-{@render children()}
+<Navigation {session} {supabase} />
+
+<div class="min-h-screen bg-background">
+    {@render children()}
+</div>
