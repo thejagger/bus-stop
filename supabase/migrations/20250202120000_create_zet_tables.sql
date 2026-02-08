@@ -56,7 +56,7 @@ ALTER TABLE public.devices ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Allow read stops" ON public.stops FOR SELECT USING (true);
 CREATE POLICY "Allow read routes" ON public.routes FOR SELECT USING (true);
 CREATE POLICY "Allow read stop_routes" ON public.stop_routes FOR SELECT USING (true);
--- Devices: only service role (cron, device API, dashboard server) can access
-CREATE POLICY "Service role read devices" ON public.devices FOR SELECT USING (auth.role() = 'service_role');
-CREATE POLICY "Service role insert devices" ON public.devices FOR INSERT WITH CHECK (auth.role() = 'service_role');
-CREATE POLICY "Service role update devices" ON public.devices FOR UPDATE USING (auth.role() = 'service_role');
+-- Devices: allow anonymous users to insert/update (public setup page)
+CREATE POLICY "Allow anon read devices" ON public.devices FOR SELECT USING (true);
+CREATE POLICY "Allow anon insert devices" ON public.devices FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow anon update devices" ON public.devices FOR UPDATE USING (true);
