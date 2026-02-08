@@ -98,6 +98,12 @@ async function fetchIncomingTrips(stopId: string): Promise<Array<{
 
 Deno.serve(async (req: Request) => {
     const origin = req.headers.get("Origin");
+    const hourMinuteFormatter = new Intl.DateTimeFormat('en-GB', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+        timeZone: 'Europe/Vienna', // Or your specific city/region
+    });
 
     if (req.method === "OPTIONS") {
         return new Response(null, {headers: corsHeaders(origin)});
@@ -168,20 +174,20 @@ Deno.serve(async (req: Request) => {
                     (t: { routeShortName?: string }) =>
                         t.routeShortName === String(routeId)
                 );
-                const nextTwo = forRoute.slice(0, 2);
 
-                trips.push(...nextTwo.map((t) => {
-                    const expectedArrivalDateTime = new Date(t.expectedArrivalDateTime).getTime();
-                    const now = new Date().getTime();
+                trips.push(...forRoute.map((t) => {
+                    const expectedArrivalDateTime = new Date(t.expectedArrivalDateTime);
+                    const expectedArrivalTime = new Date(t.expectedArrivalDateTime).getTime();
+                    const nowTime = new Date().getTime();
                     let arrivalTime: number = 0;
 
-                    if (expectedArrivalDateTime > now) {
-                        arrivalTime = Math.floor((expectedArrivalDateTime - now) / 60000);
+                    if (expectedArrivalTime > nowTime) {
+                        arrivalTime = Math.floor((expectedArrivalTime - nowTime) / 60000);
                     }
 
                     let arrivalTimeString: string = "";
                     if (arrivalTime > 20) {
-                        arrivalTimeString = new Date(t.expectedArrivalDateTime).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+                        arrivalTimeString = hourMinuteFormatter.format(expectedArrivalDateTime);
                     } else {
                         arrivalTimeString = `${arrivalTime} min`;
                     }
